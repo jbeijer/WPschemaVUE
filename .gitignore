@@ -25,9 +25,11 @@ yarn-error.log
 .pnpm-debug.log
 
 # Vue.js build output
-admin/vue-app/dist/
-admin/vue-app/dist-ssr/
-admin/vue-app/.vite/
+admin//dist/
+admin/dist-ssr/
+admin/.vite/
+admin/dist/js
+admin/dist/css
 
 # Environment files
 .env

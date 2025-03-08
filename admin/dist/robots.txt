@@ -1,0 +1,3 @@
+# This is a WordPress admin area, disallow all robots
+User-agent: *
+Disallow: /

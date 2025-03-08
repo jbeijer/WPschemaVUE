@@ -1,0 +1,134 @@
+{
+  "_organizations-B3pHQGhl.js": {
+    "file": "js/organizations-B3pHQGhl.js",
+    "name": "organizations",
+    "imports": [
+      "index.html"
+    ]
+  },
+  "_resources-DiZVBBdZ.js": {
+    "file": "js/resources-DiZVBBdZ.js",
+    "name": "resources",
+    "imports": [
+      "index.html"
+    ]
+  },
+  "_schedules-C0GYZ6UX.js": {
+    "file": "js/schedules-C0GYZ6UX.js",
+    "name": "schedules",
+    "imports": [
+      "index.html"
+    ]
+  },
+  "_users-CbUdu0qE.js": {
+    "file": "js/users-CbUdu0qE.js",
+    "name": "users",
+    "imports": [
+      "index.html"
+    ]
+  },
+  "index.html": {
+    "file": "js/index.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "dynamicImports": [
+      "src/views/Dashboard.vue",
+      "src/views/Organizations.vue",
+      "src/views/Resources.vue",
+      "src/views/Schedules.vue",
+      "src/views/Settings.vue",
+      "src/views/UserManagement.vue"
+    ],
+    "css": [
+      "css/index.css"
+    ]
+  },
+  "src/views/Dashboard.vue": {
+    "file": "js/Dashboard-DCaKs2OJ.js",
+    "name": "Dashboard",
+    "src": "src/views/Dashboard.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_users-CbUdu0qE.js",
+      "_organizations-B3pHQGhl.js",
+      "_schedules-C0GYZ6UX.js",
+      "index.html"
+    ],
+    "css": [
+      "css/Dashboard.css"
+    ]
+  },
+  "src/views/Organizations.vue": {
+    "file": "js/Organizations-DGt1OBZB.js",
+    "name": "Organizations",
+    "src": "src/views/Organizations.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_organizations-B3pHQGhl.js",
+      "_users-CbUdu0qE.js",
+      "_resources-DiZVBBdZ.js",
+      "index.html"
+    ],
+    "css": [
+      "css/Organizations.css"
+    ]
+  },
+  "src/views/Resources.vue": {
+    "file": "js/Resources-d46-nOjR.js",
+    "name": "Resources",
+    "src": "src/views/Resources.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_organizations-B3pHQGhl.js",
+      "_resources-DiZVBBdZ.js",
+      "index.html"
+    ],
+    "css": [
+      "css/Resources.css"
+    ]
+  },
+  "src/views/Schedules.vue": {
+    "file": "js/Schedules-DudhYW_x.js",
+    "name": "Schedules",
+    "src": "src/views/Schedules.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_resources-DiZVBBdZ.js",
+      "_schedules-C0GYZ6UX.js",
+      "_users-CbUdu0qE.js",
+      "_organizations-B3pHQGhl.js",
+      "index.html"
+    ],
+    "css": [
+      "css/Schedules.css"
+    ]
+  },
+  "src/views/Settings.vue": {
+    "file": "js/Settings-BTY2VAWj.js",
+    "name": "Settings",
+    "src": "src/views/Settings.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_users-CbUdu0qE.js",
+      "index.html"
+    ],
+    "css": [
+      "css/Settings.css"
+    ]
+  },
+  "src/views/UserManagement.vue": {
+    "file": "js/UserManagement-Bhdhzuwv.js",
+    "name": "UserManagement",
+    "src": "src/views/UserManagement.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_organizations-B3pHQGhl.js",
+      "_users-CbUdu0qE.js",
+      "index.html"
+    ],
+    "css": [
+      "css/UserManagement.css"
+    ]
+  }
+}
