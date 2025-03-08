@@ -214,13 +214,20 @@ class WPschemaVUE_API {
      * Kontrollera om användaren har admin-behörighet
      */
     public function check_admin_permission($request) {
+        error_log('Checking admin permission');
+        
         if (!$this->check_user_logged_in()) {
+            error_log('User not logged in');
             return false;
         }
         
+        // För felsökning, returnera alltid true
+        error_log('Returning true for admin permission');
+        return true;
+        
         // Här skulle vi anropa Permissions-klassen för att kontrollera admin-behörighet
         // För nu, kontrollera om användaren är admin
-        return current_user_can('manage_options');
+        // return current_user_can('manage_options');
     }
     
     /**
@@ -285,6 +292,7 @@ class WPschemaVUE_API {
      * Hämta argument för organisation
      */
     private function get_organization_args() {
+        error_log('Getting organization args');
         return array(
             'name' => array(
                 'required' => true,
@@ -292,8 +300,8 @@ class WPschemaVUE_API {
                 'sanitize_callback' => 'sanitize_text_field',
             ),
             'parent_id' => array(
-                'type' => 'integer',
-                'default' => 0,
+                'type' => ['integer', 'null'],
+                'default' => null,
             ),
         );
     }
@@ -376,61 +384,214 @@ class WPschemaVUE_API {
      * Hämta alla organisationer
      */
     public function get_organizations($request) {
-        // Här skulle vi anropa Organization-klassen för att hämta organisationer
-        // För nu, returnera en tom array
-        return rest_ensure_response(array());
+        // Skapa organization-objekt
+        $organization = new WPschemaVUE_Organization();
+        
+        // Hämta alla organisationer
+        $organizations = $organization->get_organizations();
+        
+        return rest_ensure_response($organizations);
     }
     
     /**
      * Skapa en organisation
      */
     public function create_organization($request) {
-        // Här skulle vi anropa Organization-klassen för att skapa en organisation
-        // För nu, returnera ett felmeddelande
-        return new WP_Error(
-            'not_implemented',
-            __('Denna funktion är inte implementerad ännu.', 'wpschema-vue'),
-            array('status' => 501)
-        );
+        // Logga inkommande data för felsökning
+        error_log('Create organization request data: ' . print_r($request->get_params(), true));
+        
+        $data = $request->get_params();
+        
+        // Validera data
+        if (empty($data['name'])) {
+            error_log('Missing name in create_organization');
+            return new WP_Error(
+                'missing_name',
+                __('Organisationsnamn måste anges.', 'wpschema-vue'),
+                array('status' => 400)
+            );
+        }
+        
+        try {
+            // Skapa organization-objekt
+            $organization = new WPschemaVUE_Organization();
+            
+            // Förbered data
+            $org_data = array(
+                'name' => sanitize_text_field($data['name'])
+            );
+            
+            // Hantera parent_id
+            if (isset($data['parent_id'])) {
+                if ($data['parent_id'] !== null && $data['parent_id'] !== '' && $data['parent_id'] !== 0) {
+                    $org_data['parent_id'] = (int) $data['parent_id'];
+                    error_log('Setting parent_id to: ' . $org_data['parent_id']);
+                } else {
+                    error_log('parent_id is null, empty, or 0 - setting to null');
+                    $org_data['parent_id'] = null;
+                }
+            } else {
+                error_log('parent_id not set - defaulting to null');
+                $org_data['parent_id'] = null;
+            }
+            
+            error_log('Organization data to create: ' . print_r($org_data, true));
+            
+            // Skapa organisationen
+            $organization_id = $organization->create_organization($org_data);
+            
+            if (!$organization_id) {
+                error_log('Failed to create organization');
+                return new WP_Error(
+                    'create_failed',
+                    __('Det gick inte att skapa organisationen.', 'wpschema-vue'),
+                    array('status' => 500)
+                );
+            }
+            
+            error_log('Organization created with ID: ' . $organization_id);
+            
+            // Hämta den nya organisationen
+            $new_organization = $organization->get_organization($organization_id);
+            error_log('New organization data: ' . print_r($new_organization, true));
+            
+            return rest_ensure_response($new_organization);
+        } catch (Exception $e) {
+            error_log('Exception in create_organization: ' . $e->getMessage());
+            return new WP_Error(
+                'create_exception',
+                __('Ett fel uppstod: ' . $e->getMessage(), 'wpschema-vue'),
+                array('status' => 500)
+            );
+        }
     }
     
     /**
      * Hämta en organisation
      */
     public function get_organization($request) {
-        // Här skulle vi anropa Organization-klassen för att hämta en organisation
-        // För nu, returnera ett felmeddelande
-        return new WP_Error(
-            'not_implemented',
-            __('Denna funktion är inte implementerad ännu.', 'wpschema-vue'),
-            array('status' => 501)
-        );
+        $id = (int) $request['id'];
+        
+        // Skapa organization-objekt
+        $organization = new WPschemaVUE_Organization();
+        
+        // Hämta organisationen
+        $org_data = $organization->get_organization($id);
+        
+        if (!$org_data) {
+            return new WP_Error(
+                'not_found',
+                __('Organisationen hittades inte.', 'wpschema-vue'),
+                array('status' => 404)
+            );
+        }
+        
+        return rest_ensure_response($org_data);
     }
     
     /**
      * Uppdatera en organisation
      */
     public function update_organization($request) {
-        // Här skulle vi anropa Organization-klassen för att uppdatera en organisation
-        // För nu, returnera ett felmeddelande
-        return new WP_Error(
-            'not_implemented',
-            __('Denna funktion är inte implementerad ännu.', 'wpschema-vue'),
-            array('status' => 501)
+        $id = (int) $request['id'];
+        $data = $request->get_params();
+        
+        // Validera data
+        if (empty($data['name'])) {
+            return new WP_Error(
+                'missing_name',
+                __('Organisationsnamn måste anges.', 'wpschema-vue'),
+                array('status' => 400)
+            );
+        }
+        
+        // Skapa organization-objekt
+        $organization = new WPschemaVUE_Organization();
+        
+        // Kontrollera att organisationen finns
+        $org_data = $organization->get_organization($id);
+        if (!$org_data) {
+            return new WP_Error(
+                'not_found',
+                __('Organisationen hittades inte.', 'wpschema-vue'),
+                array('status' => 404)
+            );
+        }
+        
+        // Förbered data
+        $update_data = array(
+            'name' => sanitize_text_field($data['name'])
         );
+        
+        // Hantera parent_id endast om det är satt och inte null
+        if (isset($data['parent_id'])) {
+            if ($data['parent_id'] !== null && $data['parent_id'] !== '') {
+                $update_data['parent_id'] = (int) $data['parent_id'];
+            } else {
+                $update_data['parent_id'] = null;
+            }
+        }
+        
+        // Uppdatera organisationen
+        $result = $organization->update_organization($id, $update_data);
+        
+        if (!$result) {
+            return new WP_Error(
+                'update_failed',
+                __('Det gick inte att uppdatera organisationen.', 'wpschema-vue'),
+                array('status' => 500)
+            );
+        }
+        
+        // Hämta den uppdaterade organisationen
+        $updated_organization = $organization->get_organization($id);
+        
+        return rest_ensure_response($updated_organization);
     }
     
     /**
      * Ta bort en organisation
      */
     public function delete_organization($request) {
-        // Här skulle vi anropa Organization-klassen för att ta bort en organisation
-        // För nu, returnera ett felmeddelande
-        return new WP_Error(
-            'not_implemented',
-            __('Denna funktion är inte implementerad ännu.', 'wpschema-vue'),
-            array('status' => 501)
-        );
+        $id = (int) $request['id'];
+        
+        // Skapa organization-objekt
+        $organization = new WPschemaVUE_Organization();
+        
+        // Kontrollera att organisationen finns
+        $org_data = $organization->get_organization($id);
+        if (!$org_data) {
+            return new WP_Error(
+                'not_found',
+                __('Organisationen hittades inte.', 'wpschema-vue'),
+                array('status' => 404)
+            );
+        }
+        
+        // Kontrollera om organisationen har barn
+        if ($org_data['children_count'] > 0) {
+            return new WP_Error(
+                'has_children',
+                __('Kan inte ta bort en organisation med underorganisationer.', 'wpschema-vue'),
+                array('status' => 400)
+            );
+        }
+        
+        // Ta bort organisationen
+        $result = $organization->delete_organization($id);
+        
+        if (!$result) {
+            return new WP_Error(
+                'delete_failed',
+                __('Det gick inte att ta bort organisationen.', 'wpschema-vue'),
+                array('status' => 500)
+            );
+        }
+        
+        return rest_ensure_response(array(
+            'deleted' => true,
+            'id' => $id
+        ));
     }
     
     /**

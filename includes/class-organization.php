@@ -129,11 +129,14 @@ class WPschemaVUE_Organization {
         );
         
         // Hantera parent_id
-        if (!empty($data['parent_id'])) {
-            $parent = $this->get_organization($data['parent_id']);
-            if ($parent) {
-                $insert_data['parent_id'] = $data['parent_id'];
+        if (isset($data['parent_id'])) {
+            if ($data['parent_id'] !== null && $data['parent_id'] !== '' && $data['parent_id'] !== 0) {
+                $parent = $this->get_organization($data['parent_id']);
+                if ($parent) {
+                    $insert_data['parent_id'] = $data['parent_id'];
+                }
             }
+            // Om parent_id är null, tom sträng eller 0, sätt inte parent_id (det blir NULL i databasen)
         }
         
         // Sätt in i databasen
