@@ -13,6 +13,7 @@ export default defineConfig({
     },
   },
   build: {
+    sourcemap: true,
     // Generate manifest.json in outDir
     manifest: true,
     rollupOptions: {
@@ -28,7 +29,7 @@ export default defineConfig({
         },
       },
     },
-    outDir: 'dist',
+    outDir: '../../admin/dist',
     emptyOutDir: true,
   },
   server: {

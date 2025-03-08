@@ -1,4 +1,24 @@
 <?php
+// Security constant check
+if (!defined('ABSPATH')) {
+    define('ABSPATH', dirname(__FILE__) . '/../../../');
+}
+
+// Plugin-specific constants for IDE support
+if (!defined('WPSCHEMA_VUE_PLUGIN_BASENAME')) {
+    define('WPSCHEMA_VUE_PLUGIN_BASENAME', 'wpschema-vue/wpschema-vue.php');
+}
+
+if (!defined('WPSCHEMA_VUE_VERSION')) {
+    define('WPSCHEMA_VUE_VERSION', '1.0.0');
+}
+
+// WordPress function stubs for IDE support
+if (!function_exists('esc_url')) {
+    function esc_url($url, $protocols = null, $_context = 'display') {
+        return $url; // Stub implementation
+    }
+}
 /**
  * WordPress function stubs for IDE type checking
  */

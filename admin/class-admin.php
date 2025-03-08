@@ -34,6 +34,9 @@ class WPschemaVUE_Admin {
         
         // Lägg till inställningslänk på plugins-sidan
         add_filter('plugin_action_links_' . WPSCHEMA_VUE_PLUGIN_BASENAME, array($this, 'add_settings_link'));
+        
+        // Lägg till filter för att lägga till type="module" på script-taggen
+        add_filter('script_loader_tag', array($this, 'wpschema_vue_script_module'), 10, 3);
     }
     
     /**
@@ -107,7 +110,7 @@ class WPschemaVUE_Admin {
         // Ladda Vue-appens JavaScript med korrekt path
         wp_enqueue_script(
             'wpschema-vue-app',
-            plugins_url('admin/dist/js/index.js', dirname(dirname(__FILE__))),
+            plugins_url('admin/dist/js/index.js', dirname(__FILE__)),
             array(),
             WPSCHEMA_VUE_VERSION,
             true
@@ -116,7 +119,7 @@ class WPschemaVUE_Admin {
         // Ladda Vue-appens CSS med korrekt path
         wp_enqueue_style(
             'wpschema-vue-style',
-            plugins_url('admin/dist/css/index.css', dirname(dirname(__FILE__)))
+            plugins_url('admin/dist/css/index.css', dirname(__FILE__))
         );
 
         // Skicka WordPress-data till Vue-appen
@@ -136,6 +139,16 @@ class WPschemaVUE_Admin {
         ));
     }
     
+    /**
+     * Filter för att lägga till type="module" på script-taggen
+     */
+    public function wpschema_vue_script_module($tag, $handle, $src) {
+        if ('wpschema-vue-app' === $handle) {
+            return '<script type="module" src="' . esc_url($src) . '"></script>';
+        }
+        return $tag;
+    }
+
     /**
      * Lägg till inställningslänk på plugins-sidan
      */
