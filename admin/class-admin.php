@@ -13,9 +13,8 @@ if (!defined('ABSPATH')) {
 }
 
 // Inkludera WordPress-funktioner om de inte finns
-if (!function_exists('add_action')) {
-    require_once(ABSPATH . 'wp-includes/pluggable.php');
-}
+require_once ABSPATH . 'wp-includes/rest-api.php';
+require_once ABSPATH . 'wp-includes/pluggable.php';
 
 /**
  * Hanterar admin-funktionalitet för pluginet
@@ -37,6 +36,61 @@ class WPschemaVUE_Admin {
         
         // Lägg till filter för att lägga till type="module" på script-taggen
         add_filter('script_loader_tag', array($this, 'wpschema_vue_script_module'), 10, 3);
+        
+        // Registrera nytt REST API för användarhantering
+        add_action('rest_api_init', function() {
+            register_rest_route('wpsv/v1', '/users', array(
+                'methods' => 'GET',
+                'callback' => function($request) {
+                    $users = WPschemaVUE_Permissions::get_all_users();
+                    return rest_ensure_response($users);
+                },
+                'permission_callback' => function() {
+                    return WPschemaVUE_Permissions::current_user_can('manage_options');
+                }
+            ));
+
+            register_rest_route('wpsv/v1', '/users/(?P<id>\d+)', array(
+                'methods' => 'POST',
+                'callback' => function($request) {
+                    global $wpdb;
+
+                    if (!WPschemaVUE_Permissions::current_user_can('manage_options')) {
+                        return new WP_Error('forbidden', 'Otillåten åtkomst', array('status' => 403));
+                    }
+
+                    $params = $request->get_json_params();
+                    $required = ['org_id', 'new_role'];
+                    
+                    foreach ($required as $field) {
+                        if (!isset($params[$field])) {
+                            return new WP_Error('missing_field', "Saknat fält: $field", array('status' => 400));
+                        }
+                    }
+
+                    $result = $wpdb->update(
+                        "{$wpdb->prefix}wpschemavue_user_org_roles",
+                        array('role' => sanitize_text_field($params['new_role'])),
+                        array(
+                            'user_id' => (int)$request['id'],
+                            'org_id' => (int)$params['org_id']
+                        ),
+                        array('%s'),
+                        array('%d', '%d')
+                    );
+
+                    if ($result === false) {
+                        return new WP_Error('db_error', 'Databasfel', array('status' => 500));
+                    }
+
+                    return rest_ensure_response(array(
+                        'success' => true,
+                        'message' => 'Behörighet uppdaterad'
+                    ));
+                },
+                'permission_callback' => '__return_true'
+            ));
+        });
     }
     
     /**
@@ -93,6 +147,16 @@ class WPschemaVUE_Admin {
             'wpschema-vue-settings',
             array($this, 'render_settings_page')
         );
+        
+        // Undermeny för användare
+        add_submenu_page(
+            'wpschema-vue',
+            __('Användare', 'wpschema-vue'),
+            __('Användare', 'wpschema-vue'),
+            'manage_options',
+            'wpschema-vue-users',
+            array($this, 'render_admin_page')
+        );
     }
     
     /**
@@ -125,7 +189,7 @@ class WPschemaVUE_Admin {
         // Skicka WordPress-data till Vue-appen
         wp_localize_script('wpschema-vue-app', 'wpScheduleData', array(
             'nonce' => wp_create_nonce('wp_rest'),
-            'rest_url' => esc_url_raw(rest_url('schedule/v1')),
+            'rest_url' => esc_url_raw(rest_url()),
             'admin_url' => admin_url(),
             'plugin_url' => plugins_url('/', dirname(__FILE__)),
             'current_user' => $this->get_current_user_data(),

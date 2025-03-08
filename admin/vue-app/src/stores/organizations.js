@@ -69,7 +69,7 @@ export const useOrganizationsStore = defineStore('organizations', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations`, {
           method: 'GET',
           credentials: 'same-origin',
           headers: {
@@ -99,7 +99,7 @@ export const useOrganizationsStore = defineStore('organizations', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${id}`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${id}`, {
           method: 'GET',
           credentials: 'same-origin',
           headers: {
@@ -140,7 +140,7 @@ export const useOrganizationsStore = defineStore('organizations', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: {
@@ -173,7 +173,7 @@ export const useOrganizationsStore = defineStore('organizations', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${id}`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${id}`, {
           method: 'PUT',
           credentials: 'same-origin',
           headers: {
@@ -216,7 +216,7 @@ export const useOrganizationsStore = defineStore('organizations', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${id}`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${id}`, {
           method: 'DELETE',
           credentials: 'same-origin',
           headers: {

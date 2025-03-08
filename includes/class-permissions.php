@@ -12,6 +12,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+require_once ABSPATH . 'wp-includes/pluggable.php';
+
 /**
  * Permissions-klass
  */
@@ -36,6 +38,48 @@ class WPschemaVUE_Permissions {
      * Cache för behörigheter
      */
     private $permission_cache = array();
+    
+    /**
+     * Rolldefinitioner
+     */
+    private $roles = array(
+        'base' => array(
+            'read' => true,
+            'edit_posts' => false,
+            'delete_posts' => false,
+        ),
+        'schemalaggare' => array(
+            'read' => true,
+            'edit_posts' => false,
+            'delete_posts' => false,
+            'manage_shifts' => true, // Ability to manage shifts
+            'assign_shifts' => true, // Ability to assign shifts to others
+        ),
+        'wpschema_anvandare' => array(
+            'read' => true,
+            'edit_posts' => false,
+            'delete_posts' => false,
+            'view_organizations' => true, // Ability to view organizations
+        ),
+        'schemaanmain' => array(
+            'read' => true,
+            'edit_posts' => true,
+            'delete_posts' => true,
+            'manage_resources' => true, // Ability to manage resources
+            'manage_users' => true, // Ability to manage users
+            'manage_organizations' => true, // Ability to manage organizations
+            'lock_shifts' => true, // Ability to lock shifts
+            'force_delete_shifts' => true, // Ability to force delete shifts
+        ),
+        'admin' => array(
+            'read' => true,
+            'edit_posts' => true,
+            'delete_posts' => true,
+            'manage_resources' => true, // Ability to manage resources
+            'lock_shifts' => true, // Ability to lock shifts
+            'force_delete_shifts' => true, // Ability to force delete shifts
+        ),
+    );
     
     /**
      * Konstruktor
@@ -387,9 +431,73 @@ class WPschemaVUE_Permissions {
     }
     
     /**
+     * Registrera roller och behörigheter
+     */
+    public function register_roles() {
+        foreach ($this->roles as $role => $capabilities) {
+            add_role($role, ucfirst(str_replace('_', ' ', $role)), $capabilities);
+        }
+    }
+    
+    /**
+     * Lägg till en behörighet till en roll
+     *
+     * @param string $role Roll
+     * @param string $capability Behörighet
+     * @param bool $allow Tillåt behörighet (true) eller neka (false)
+     */
+    public function add_capability($role, $capability, $allow) {
+        if (!isset($this->roles[$role])) {
+            return;
+        }
+        
+        $this->roles[$role][$capability] = $allow;
+    }
+    
+    /**
      * Rensa behörighetscachen
      */
     public function clear_cache() {
         $this->permission_cache = array();
+    }
+    
+    /**
+     * Hämta alla användare med deras organisationer och roller
+     *
+     * @return array Användarinformation
+     */
+    public static function get_all_users() {
+        global $wpdb;
+        
+        if (!self::current_user_can('manage_options')) {
+            return new WP_Error('forbidden', 'Otillåten åtkomst', array('status' => 403));
+        }
+
+        $query = $wpdb->prepare(
+            "SELECT u.ID, u.user_email, u.display_name, 
+                    GROUP_CONCAT(o.org_name) as organisations,
+                    GROUP_CONCAT(ur.role) as roles
+             FROM {$wpdb->users} u
+             LEFT JOIN {$wpdb->prefix}wpschemavue_user_org_roles ur ON u.ID = ur.user_id
+             LEFT JOIN {$wpdb->prefix}wpschemavue_organisations o ON ur.org_id = o.id
+             GROUP BY u.ID
+             ORDER BY u.display_name"
+        );
+
+        return $wpdb->get_results($query);
+    }
+    
+    /**
+     * Kontrollera om den aktuella användaren har en viss behörighet
+     *
+     * @param string $capability Behörighet
+     * @param int $user_id Användar-ID (valfritt)
+     * @return bool True om användaren har behörigheten, false annars
+     */
+    public static function current_user_can($capability, $user_id = null) {
+        if (!$user_id) {
+            $user_id = get_current_user_id();
+        }
+        return user_can($user_id, $capability);
     }
 }

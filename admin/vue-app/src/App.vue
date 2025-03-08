@@ -23,6 +23,9 @@
             <li>
               <router-link :to="{ name: 'settings' }">Inställningar</router-link>
             </li>
+            <li>
+              <router-link :to="{ name: 'users' }">Användarhantering</router-link>
+            </li>
           </ul>
         </nav>
       </aside>
@@ -58,6 +61,8 @@ export default {
           return 'Scheman';
         case 'settings':
           return 'Inställningar';
+        case 'users':
+          return 'Användarhantering';
         default:
           return 'Schema Manager';
       }

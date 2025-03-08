@@ -7,6 +7,7 @@ const Organizations = () => import('../views/Organizations.vue');
 const Resources = () => import('../views/Resources.vue');
 const Schedules = () => import('../views/Schedules.vue');
 const Settings = () => import('../views/Settings.vue');
+const UserManagement = () => import('../views/UserManagement.vue');
 
 // Define routes
 const routes = [
@@ -53,6 +54,16 @@ const routes = [
     meta: {
       title: 'Inställningar',
       requiresAuth: true
+    }
+  },
+  {
+    path: '/users',
+    name: 'users',
+    component: UserManagement,
+    meta: {
+      title: 'Användarhantering',
+      requiresAuth: true,
+      requiredPermissions: ['list_users', 'edit_users']
     }
   },
   // Catch-all route for 404

@@ -7,7 +7,8 @@ export const useUsersStore = defineStore('users', {
     error: null,
     currentUser: null,
     currentOrganizationId: null,
-    currentUserInfo: null
+    currentUserInfo: null,
+    allUsers: [] // New state to store all users from all organizations
   }),
   
   getters: {
@@ -40,7 +41,7 @@ export const useUsersStore = defineStore('users', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${organizationId}/users`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${organizationId}/users`, {
           method: 'GET',
           credentials: 'same-origin',
           headers: {
@@ -65,6 +66,52 @@ export const useUsersStore = defineStore('users', {
       }
     },
     
+    // Fetch all WordPress users
+    async fetchAllWordPressUsers() {
+      this.loading = true;
+      this.error = null;
+      
+      try {
+        const wpData = window.wpScheduleData || {};
+        // Use the WordPress REST API to fetch all users
+        const response = await fetch(`${wpData.rest_url}wp/v2/users?per_page=100`, {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-WP-Nonce': wpData.nonce
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        // Transform the data to match our expected format
+        this.allUsers = data.map(user => ({
+          id: user.id,
+          user_id: user.id,
+          user_data: {
+            display_name: user.name,
+            user_email: user.email || user.slug + '@example.com' // Email might be hidden for privacy
+          },
+          role: user.roles ? user.roles.join(', ') : '' // WordPress roles, check if roles exists
+        }));
+        
+        // Also set as current users for display
+        this.users = this.allUsers;
+        
+        return this.allUsers;
+      } catch (error) {
+        console.error('Error fetching all WordPress users:', error);
+        this.error = error.message;
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+    
     // Fetch current user info
     async fetchCurrentUserInfo() {
       this.loading = true;
@@ -72,7 +119,7 @@ export const useUsersStore = defineStore('users', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/me`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/me`, {
           method: 'GET',
           credentials: 'same-origin',
           headers: {
@@ -104,7 +151,7 @@ export const useUsersStore = defineStore('users', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${organizationId}/users`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${organizationId}/users`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: {
@@ -137,7 +184,7 @@ export const useUsersStore = defineStore('users', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${organizationId}/users/${userId}`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${organizationId}/users/${userId}`, {
           method: 'PUT',
           credentials: 'same-origin',
           headers: {
@@ -180,7 +227,7 @@ export const useUsersStore = defineStore('users', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${organizationId}/users/${userId}`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${organizationId}/users/${userId}`, {
           method: 'DELETE',
           credentials: 'same-origin',
           headers: {

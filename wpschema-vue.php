@@ -128,5 +128,11 @@ class WPschemaVUE {
     }
 }
 
+add_action( 'init', 'wpschema_vue_register_custom_roles' );
+function wpschema_vue_register_custom_roles() {
+    $permissions = new WPschemaVUE_Permissions();
+    $permissions->register_roles();
+}
+
 // Starta pluginet
 $wpschema_vue = new WPschemaVUE();
