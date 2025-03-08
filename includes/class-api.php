@@ -607,13 +607,58 @@ class WPschemaVUE_API {
      * Lägg till en användare i en organisation
      */
     public function add_organization_user($request) {
-        // Här skulle vi anropa UserOrganization-klassen för att lägga till en användare
-        // För nu, returnera ett felmeddelande
-        return new WP_Error(
-            'not_implemented',
-            __('Denna funktion är inte implementerad ännu.', 'wpschema-vue'),
-            array('status' => 501)
-        );
+        $organization_id = (int) $request['id'];
+        $data = $request->get_params();
+        
+        // Validera inkommande data
+        if (empty($data['user_id']) {
+            return new WP_Error(
+                'missing_user_id',
+                __('Användar-ID måste anges.', 'wpschema-vue'),
+                array('status' => 400)
+            );
+        }
+
+        // Skapa UserOrganization-objekt
+        $user_org = new WPschemaVUE_User_Organization();
+        
+        try {
+            // Kontrollera befintlig koppling
+            if ($user_org->association_exists($data['user_id'], $organization_id)) {
+                return new WP_Error(
+                    'duplicate_association',
+                    __('Användaren är redan kopplad till denna organisation.', 'wpschema-vue'),
+                    array('status' => 409)
+                );
+            }
+
+            // Skapa association
+            $association_data = array(
+                'user_id' => (int) $data['user_id'],
+                'organization_id' => $organization_id,
+                'role' => sanitize_text_field($data['role'] ?? 'base')
+            );
+
+            $association_id = $user_org->create_association($association_data);
+            
+            // Uppdatera användarroll om angedd
+            if (!empty($data['role'])) {
+                $permissions = new WPschemaVUE_Permissions();
+                $permissions->update_user_role($data['user_id'], $data['role']);
+            }
+
+            return rest_ensure_response(array(
+                'id' => $association_id,
+                'message' => __('Användaren har kopplats till organisationen.', 'wpschema-vue')
+            ));
+            
+        } catch (Exception $e) {
+            return new WP_Error(
+                'database_error',
+                __('Databasfel: ' . $e->getMessage(), 'wpschema-vue'),
+                array('status' => 500)
+            );
+        }
     }
     
     /**
