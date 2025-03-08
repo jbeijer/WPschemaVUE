@@ -1,10 +1,10 @@
 <?php
 /**
  * Admin-klass för WPschemaVUE
- *
- * Hanterar admin-funktionalitet för pluginet
- *
+ * 
  * @package WPschemaVUE
+ * 
+ * @wordpress-plugin
  */
 
 // Säkerhetskontroll - förhindra direkt åtkomst
@@ -12,8 +12,13 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Inkludera WordPress-funktioner om de inte finns
+if (!function_exists('add_action')) {
+    require_once(ABSPATH . 'wp-includes/pluggable.php');
+}
+
 /**
- * Admin-klass
+ * Hanterar admin-funktionalitet för pluginet
  */
 class WPschemaVUE_Admin {
     
@@ -89,36 +94,37 @@ class WPschemaVUE_Admin {
     
     /**
      * Registrera skript och stilar
+     * 
+     * Använder wp_enqueue_script och wp_enqueue_style för att ladda Vue-appens filer
+     * med korrekta WordPress-paths via plugins_url()
      */
     public function enqueue_scripts($hook) {
-        // Ladda bara på plugin-sidor
+        // Ladda på alla plugin-sidor (inte bara huvudsidan)
         if (strpos($hook, 'wpschema-vue') === false) {
             return;
         }
-        
-        // Registrera och ladda Vue-appen
-        wp_register_script(
-            'wpschema-vue-admin-app',
-            WPSCHEMA_VUE_PLUGIN_URL . 'admin/vue-app/dist/js/app.js',
+
+        // Ladda Vue-appens JavaScript med korrekt path
+        wp_enqueue_script(
+            'wpschema-vue-app',
+            plugins_url('admin/dist/js/index.js', dirname(dirname(__FILE__))),
             array(),
             WPSCHEMA_VUE_VERSION,
             true
         );
-        
-        // Registrera och ladda stilar
-        wp_register_style(
-            'wpschema-vue-admin-styles',
-            WPSCHEMA_VUE_PLUGIN_URL . 'admin/vue-app/dist/css/app.css',
-            array(),
-            WPSCHEMA_VUE_VERSION
+
+        // Ladda Vue-appens CSS med korrekt path
+        wp_enqueue_style(
+            'wpschema-vue-style',
+            plugins_url('admin/dist/css/index.css', dirname(dirname(__FILE__)))
         );
-        
-        // Skicka data till Vue-appen
-        wp_localize_script('wpschema-vue-admin-app', 'wpScheduleData', array(
+
+        // Skicka WordPress-data till Vue-appen
+        wp_localize_script('wpschema-vue-app', 'wpScheduleData', array(
             'nonce' => wp_create_nonce('wp_rest'),
             'rest_url' => esc_url_raw(rest_url('schedule/v1')),
-            'admin_url' => admin_url('admin.php'),
-            'plugin_url' => WPSCHEMA_VUE_PLUGIN_URL,
+            'admin_url' => admin_url(),
+            'plugin_url' => plugins_url('/', dirname(dirname(__FILE__))),
             'current_user' => $this->get_current_user_data(),
             'pages' => array(
                 'dashboard' => 'wpschema-vue',
@@ -128,10 +134,6 @@ class WPschemaVUE_Admin {
                 'settings' => 'wpschema-vue-settings'
             )
         ));
-        
-        // Ladda skript och stilar
-        wp_enqueue_script('wpschema-vue-admin-app');
-        wp_enqueue_style('wpschema-vue-admin-styles');
     }
     
     /**
