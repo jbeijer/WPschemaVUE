@@ -261,6 +261,46 @@
         </div>
       </div>
     </div>
+
+    <!-- Add User Modal -->
+    <div class="modal" v-if="showAddUserForm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Lägg till användare i organisationen</h3>
+          <button class="close-button" @click="showAddUserForm = false">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="addUser">
+            <div class="form-group">
+              <label for="user-select">Välj användare</label>
+              <select id="user-select" v-model="newUserAssignment.user_id" required>
+                <option disabled value="">Välj en användare</option>
+                <option v-for="user in allUsers" :key="user.id" :value="user.id">
+                  {{ user.user_data.display_name }} ({{ user.user_data.user_email }})
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="role-select">Välj roll</label>
+              <select id="role-select" v-model="newUserAssignment.role" required>
+                <option disabled value="">Välj roll</option>
+                <option value="base">Bas</option>
+                <option value="scheduler">Schemaläggare</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" @click="showAddUserForm = false">
+                Avbryt
+              </button>
+              <button type="submit" class="btn btn-primary" :disabled="addUserLoading">
+                {{ addUserLoading ? 'Lägger till...' : 'Lägg till' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -285,6 +325,7 @@ export default {
       deleteLoading: false,
       usersLoading: false,
       resourcesLoading: false,
+      addUserLoading: false,
       newOrganization: {
         name: '',
         parent_id: null
@@ -293,6 +334,10 @@ export default {
         id: null,
         name: '',
         parent_id: null
+      },
+      newUserAssignment: {
+        user_id: '',
+        role: ''
       },
       selectedOrganization: null,
       organizationToDelete: null,
@@ -327,6 +372,9 @@ export default {
         
         return true;
       });
+    },
+    allUsers() {
+      return this.usersStore.allUsers;
     }
   },
   created() {
@@ -490,6 +538,43 @@ export default {
           return 'Bas';
         default:
           return role;
+      }
+    },
+    async editUserRole(user) {
+      const newRole = window.prompt("Ange ny roll (base, scheduler, admin)", user.role);
+      if (newRole && ['base', 'scheduler', 'admin'].includes(newRole)) {
+        try {
+          await this.usersStore.updateUserRole(this.selectedOrganization.id, user.user_id, newRole);
+          await this.loadOrganizationUsers(this.selectedOrganization.id);
+        } catch (error) {
+          alert("Fel vid uppdatering av roll: " + error.message);
+        }
+      }
+    },
+    confirmRemoveUser(user) {
+      if (confirm("Är du säker på att du vill ta bort " + user.user_data.display_name + " från organisationen?")) {
+        this.removeUser(user);
+      }
+    },
+    async removeUser(user) {
+      try {
+        await this.usersStore.removeUserFromOrganization(this.selectedOrganization.id, user.user_id);
+        await this.loadOrganizationUsers(this.selectedOrganization.id);
+      } catch (error) {
+        alert("Fel vid borttagning: " + error.message);
+      }
+    },
+    async addUser() {
+      this.addUserLoading = true;
+      try {
+        await this.usersStore.addUserToOrganization(this.selectedOrganization.id, this.newUserAssignment);
+        await this.loadOrganizationUsers(this.selectedOrganization.id);
+        this.showAddUserForm = false;
+        this.newUserAssignment = { user_id: '', role: '' };
+      } catch (error) {
+        alert("Fel vid tillägg av användare: " + error.message);
+      } finally {
+        this.addUserLoading = false;
       }
     }
   },
