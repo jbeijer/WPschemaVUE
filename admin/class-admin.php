@@ -16,6 +16,41 @@ if (!defined('ABSPATH')) {
 require_once ABSPATH . 'wp-includes/rest-api.php';
 require_once ABSPATH . 'wp-includes/pluggable.php';
 
+if (!function_exists('register_rest_route')) {
+    function register_rest_route($namespace, $route, $args) {}
+}
+if (!function_exists('rest_ensure_response')) {
+    function rest_ensure_response($data) {
+        return $data;
+    }
+}
+if (!function_exists('sanitize_text_field')) {
+    function sanitize_text_field($data) {
+        return $data;
+    }
+}
+if (!function_exists('wp_create_nonce')) {
+    function wp_create_nonce($action) { return 'nonce'; }
+}
+if (!function_exists('rest_url')) {
+    function rest_url() { return '/wp-json/'; }
+}
+if (!function_exists('rest_url_raw')) {
+    function rest_url_raw() { return '/wp-json/'; }
+}
+if (!function_exists('admin_url')) {
+    function admin_url($path = '') { return '/wp-admin/' . $path; }
+}
+if (!function_exists('plugins_url')) {
+    function plugins_url($path = '', $plugin = '') { return '/wp-content/plugins/' . $path; }
+}
+if (!function_exists('esc_url_raw')) {
+    function esc_url_raw($url) { return $url; }
+}
+if (!function_exists('esc_url')) {
+    function esc_url($url) { return $url; }
+}
+
 /**
  * Hanterar admin-funktionalitet för pluginet
  */
@@ -226,9 +261,7 @@ class WPschemaVUE_Admin {
      * Rendera huvudadmin-sidan
      */
     public function render_admin_page() {
-        echo '<div class="wrap">';
-        echo '<div id="wpschema-vue-admin-app"></div>';
-        echo '</div>';
+        echo '<div id="wpschema-vue-admin-app" data-page="users"></div>';
     }
 
     /**
