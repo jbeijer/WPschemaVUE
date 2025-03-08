@@ -136,78 +136,78 @@ Denna lista är en detaljerad steg-för-steg-guide för att implementera WPschem
   - Verifiera behörighetskontroller
   - Testa felhantering och validering
 
-## Fas 4: Admin Vue-app (5-7 dagar)
+## Fas 4: Admin Vue-app (Pågående)
 
-### Utvecklingsmiljö
-- [ ] Konfigurera Vue 3 med Vite
+### Utvecklingsmiljé (Delvis implementerad)
+- [x] Konfigurera Vue 3 med Vite ✓
   - Skapa Vue-projekt med Vite
   - Konfigurera bygginställningar för WordPress-integration
   - Sätta upp utvecklingsserver med hot-reload
-- [ ] Sätta upp Pinia för state management
+- [x] Sätta upp Pinia för state management ✓
   - Skapa stores för organisationer, användare, resurser och scheman
   - Implementera actions för API-anrop
   - Definiera getters för filtrering och bearbetning av data
-- [ ] Konfigurera Vue Router
+- [x] Konfigurera Vue Router ✓
   - Definiera rutter för olika vyer
   - Implementera navigationsskydd baserat på behörigheter
   - Skapa nästlade rutter för hierarkisk navigation
-- [ ] Skapa build-process för att kompilera och kopiera filer till plugin
+- [x] Skapa build-process för att kompilera och kopiera filer till plugin ✓
   - Konfigurera Vite för produktion
   - Skapa skript för att kopiera byggda filer till plugin-katalogen
   - Optimera för produktion med code-splitting och lazy-loading
 
-### Grundläggande komponenter
-- [ ] Implementera autentiseringshjälpare för WordPress-integration
+### Grundläggande komponenter (Implementerade)
+- [x] Implementera autentiseringshjälpare för WordPress-integration ✓
   - Skapa service för att hantera nonce och cookie-autentisering
   - Implementera interceptors för API-anrop
   - Hantera autentiseringsfel
-- [ ] Skapa basklass för API-kommunikation
+- [x] Skapa basklass för API-kommunikation ✓
   - Implementera metoder för CRUD-operationer
   - Hantera felmeddelanden och laddningstillstånd
   - Implementera caching där lämpligt
-- [ ] Implementera Vue Layout med menynavigering
+- [x] Implementera Vue Layout med menynavigering ✓
   - Skapa responsiv layout med sidopanel
   - Implementera navigeringsmeny baserad på användarens behörigheter
   - Skapa breadcrumbs för hierarkisk navigation
 
-### Organisationshantering
-- [ ] Skapa OrganizationList-komponent med hierarkisk visualisering
+### Organisationshantering (Delvis implementerad)
+- [x] Skapa OrganizationList-komponent med hierarkisk visualisering ✓
   - Implementera trädvy för organisationshierarkin
   - Visa antal användare och resurser per organisation
   - Implementera filtrering och sökning
-- [ ] Implementera OrganizationForm för att skapa/redigera organisationer
+- [x] Implementera OrganizationForm för att skapa/redigera organisationer ✓
   - Validera formulärfält
   - Hantera föräldraorganisationsval
   - Visa feedback vid lyckad/misslyckad operation
-- [ ] Skapa UserManager för att hantera användare i organisationer
+- [x] Skapa UserManager för att hantera användare i organisationer ✓
   - Lista användare med roller
   - Implementera formulär för att lägga till/ta bort användare
   - Hantera rolluppdateringar
 
-### Resurshantering
-- [ ] Skapa ResourceList-komponent
+### Resurshantering (Implementerad)
+- [x] Skapa ResourceList-komponent ✓
   - Lista resurser med färgkodning
   - Implementera filtrering och sökning
   - Visa resursinformation och tillhörighet
-- [ ] Implementera ResourceForm för att skapa/redigera resurser
+- [x] Implementera ResourceForm för att skapa/redigera resurser ✓
   - Validera formulärfält
   - Implementera färgväljare
   - Hantera organisationstillhörighet
 
-### Schemaläggning
-- [ ] Skapa en kalenderkomponent för schemavisning
+### Schemaläggning (Pågående arbete)
+- [x] Skapa en kalenderkomponent för schemavisning ✓
   - Implementera vecko- och månadsvy
   - Visa scheman med färgkodning baserat på resurs
   - Implementera filtrering per användare och resurs
-- [ ] Implementera drag-and-drop-funktionalitet för schemaläggning
+- [x] Implementera grundläggande drag-and-drop-funktionalitet ✓
   - Skapa och redigera scheman genom drag-and-drop
   - Hantera överlappande scheman
   - Visa visuell feedback vid konflikter
-- [ ] Skapa formulär för schemahantering
+- [x] Skapa grundläggande schemaformulär ✓
   - Validera start- och sluttider
   - Hantera användar- och resursval
   - Implementera statushantering
-- [ ] Implementera konfliktkontroll för överlappande scheman
+- [ ] Implementera fullständig konfliktkontroll (Pågående)
   - Kontrollera överlappningar i realtid
   - Visa varningar vid potentiella konflikter
   - Förhindra skapande av överlappande scheman

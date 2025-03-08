@@ -127,7 +127,7 @@ class WPschemaVUE_Admin {
             'nonce' => wp_create_nonce('wp_rest'),
             'rest_url' => esc_url_raw(rest_url('schedule/v1')),
             'admin_url' => admin_url(),
-            'plugin_url' => plugins_url('/', dirname(dirname(__FILE__))),
+            'plugin_url' => plugins_url('/', dirname(__FILE__)),
             'current_user' => $this->get_current_user_data(),
             'pages' => array(
                 'dashboard' => 'wpschema-vue',
@@ -163,47 +163,42 @@ class WPschemaVUE_Admin {
      */
     public function render_admin_page() {
         echo '<div class="wrap">';
-        echo '<h1>' . __('Schema Manager', 'wpschema-vue') . '</h1>';
         echo '<div id="wpschema-vue-admin-app"></div>';
         echo '</div>';
     }
-    
+
     /**
      * Rendera organisationssidan
      */
     public function render_organizations_page() {
         echo '<div class="wrap">';
-        echo '<h1>' . __('Organisationer', 'wpschema-vue') . '</h1>';
         echo '<div id="wpschema-vue-admin-app" data-page="organizations"></div>';
         echo '</div>';
     }
-    
+
     /**
      * Rendera resurssidan
      */
     public function render_resources_page() {
         echo '<div class="wrap">';
-        echo '<h1>' . __('Resurser', 'wpschema-vue') . '</h1>';
         echo '<div id="wpschema-vue-admin-app" data-page="resources"></div>';
         echo '</div>';
     }
-    
+
     /**
      * Rendera schemasidan
      */
     public function render_schedules_page() {
         echo '<div class="wrap">';
-        echo '<h1>' . __('Scheman', 'wpschema-vue') . '</h1>';
         echo '<div id="wpschema-vue-admin-app" data-page="schedules"></div>';
         echo '</div>';
     }
-    
+
     /**
      * Rendera inställningssidan
      */
     public function render_settings_page() {
         echo '<div class="wrap">';
-        echo '<h1>' . __('Inställningar', 'wpschema-vue') . '</h1>';
         echo '<div id="wpschema-vue-admin-app" data-page="settings"></div>';
         echo '</div>';
     }
