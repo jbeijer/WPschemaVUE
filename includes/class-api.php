@@ -611,7 +611,7 @@ class WPschemaVUE_API {
         $data = $request->get_params();
         
         // Validera inkommande data
-        if (empty($data['user_id']) {
+        if (empty($data['user_id'])) {
             return new WP_Error(
                 'missing_user_id',
                 __('Användar-ID måste anges.', 'wpschema-vue'),

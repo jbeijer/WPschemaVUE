@@ -7,12 +7,51 @@
  * @package WPschemaVUE
  */
 
-// Säkerhetskontroll - förhindra direkt åtkomst
-if (!defined('ABSPATH')) {
-    exit;
-}
+ // Säkerhetskontroll - förhindra direkt åtkomst
+ if (!defined('ABSPATH')) {
+     exit;
+ }
+ 
+ // Dummy stubs for WordPress functions to satisfy intelephense
+ if (!function_exists('plugin_dir_path')) {
+     function plugin_dir_path($file) {
+         return dirname($file) . '/';
+     }
+ }
+ 
+ if (!function_exists('add_role')) {
+     function add_role($role, $display_name, $capabilities = array()) {
+         return null;
+     }
+ }
+ 
+ if (!function_exists('get_current_user_id')) {
+     function get_current_user_id() {
+         return 0;
+     }
+ }
+ 
+ if (!function_exists('user_can')) {
+     function user_can($user_id, $capability) {
+         return false;
+     }
+ }
+ 
+ if (!class_exists('WP_Error')) {
+     class WP_Error {
+         public function __construct($code, $message, $data = array()) {}
+     }
+ }
 
+// Ladda WordPress core-filer först
+require_once ABSPATH . 'wp-includes/plugin.php';
 require_once ABSPATH . 'wp-includes/pluggable.php';
+
+// Ladda våra egna klasser
+require_once plugin_dir_path(__FILE__) . 'class-user-organization.php';
+require_once plugin_dir_path(__FILE__) . 'class-organization.php';
+require_once plugin_dir_path(__FILE__) . 'class-resource.php';
+require_once plugin_dir_path(__FILE__) . 'class-schedule.php';
 
 /**
  * Permissions-klass
@@ -472,7 +511,7 @@ class WPschemaVUE_Permissions {
         if (!self::current_user_can('manage_options')) {
             return new WP_Error('forbidden', 'Otillåten åtkomst', array('status' => 403));
         }
-
+    
         $query = $wpdb->prepare(
             "SELECT u.ID, u.user_email, u.display_name, 
                     GROUP_CONCAT(o.org_name) as organisations,
@@ -483,7 +522,7 @@ class WPschemaVUE_Permissions {
              GROUP BY u.ID
              ORDER BY u.display_name"
         );
-
+    
         return $wpdb->get_results($query);
     }
     
