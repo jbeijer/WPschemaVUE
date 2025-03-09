@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/class-user-organization.php';
 /**
  * Permissions-klass för WPschemaVUE
  *
@@ -48,7 +49,6 @@ require_once ABSPATH . 'wp-includes/plugin.php';
 require_once ABSPATH . 'wp-includes/pluggable.php';
 
 // Ladda våra egna klasser
-require_once plugin_dir_path(__FILE__) . 'class-user-organization.php';
 require_once plugin_dir_path(__FILE__) . 'class-organization.php';
 require_once plugin_dir_path(__FILE__) . 'class-resource.php';
 require_once plugin_dir_path(__FILE__) . 'class-schedule.php';
@@ -124,7 +124,11 @@ class WPschemaVUE_Permissions {
      * Konstruktor
      */
     public function __construct() {
-        $this->user_organization = new WPschemaVUE_UserOrganization();
+        if (!class_exists('WPschemaVUE_UserOrganization')) {
+            // Intelephense-felen kan ignoreras vid körning om klassen laddas från rätt fil.
+            require_once __DIR__ . '/class-user-organization.php';
+        }
+        $this->user_organization = new User_Organization();
         $this->organization = new WPschemaVUE_Organization();
         $this->resource = new WPschemaVUE_Resource();
     }

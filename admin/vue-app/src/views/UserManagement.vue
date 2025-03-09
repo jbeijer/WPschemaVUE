@@ -39,6 +39,7 @@
           <th>Namn</th>
           <th>E-post</th>
           <th>Roll</th>
+          <th>Organisation</th>
           <th>Åtgärder</th>
         </tr>
       </thead>
@@ -47,6 +48,7 @@
           <td>{{ user.user_data?.display_name }}</td>
           <td>{{ user.user_data?.user_email }}</td>
           <td>{{ getRoleLabel(user.role) }}</td>
+          <td>{{ getOrganizationName(user.organization) }}</td>
           <td>
             <button 
               class="button button-primary"
@@ -85,6 +87,15 @@
       </div>
       
       <div style="margin-top: 1rem;">
+        <label>Organisation:</label>
+        <select v-model="editedUser.organization" class="org-select" :disabled="modalSaving">
+          <option v-for="org in organizations" :key="org.id" :value="org.id">
+            {{ org.name }}
+          </option>
+        </select>
+      </div>
+      
+      <div style="margin-top: 1rem;">
         <button class="button" @click="closeEditModal" :disabled="modalSaving">Avbryt</button>
         <button class="button button-primary" @click="saveUserChanges" :disabled="modalSaving">
           <span v-if="modalSaving">Sparar...</span>
@@ -110,6 +121,11 @@ export default {
     const { organizations } = storeToRefs(organizationsStore);
     const { users, loading, error } = storeToRefs(usersStore);
     
+    function getOrganizationName(orgId) {
+      const org = organizations.value.find(o => o.id === orgId);
+      return org ? org.name : '-';
+    }
+    
     return { 
       hasPermission, 
       organizationsStore, 
@@ -117,7 +133,8 @@ export default {
       organizations,
       users,
       loading,
-      error
+      error,
+      getOrganizationName
     };
   },
   data() {
@@ -170,22 +187,20 @@ export default {
       this.modalSaving = false;
       this.showEditModal = true;
     },
-    
     closeEditModal() {
       this.showEditModal = false;
       this.selectedUser = null;
       this.editedUser = null;
     },
-    
     async saveUserChanges() {
       this.modalSaving = true;
       this.modalErrorMessage = '';
       
       try {
-        if (this.selectedOrgId) {
-          // If an organization is selected, update the user's role in that organization
+        if (this.editedUser.organization) {
+          // If an organization is selected, update the user's role and organization
           await this.usersStore.updateUserRole(
-            this.selectedOrgId,
+            this.editedUser.organization,
             this.editedUser.user_id,
             this.editedUser.role
           );
@@ -213,7 +228,6 @@ export default {
         this.modalSaving = false;
       }
     },
-    
     // Map role value to human-readable label
     getRoleLabel(roleValue) {
       // Handle case when role is undefined or null
