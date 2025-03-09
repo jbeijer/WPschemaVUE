@@ -191,7 +191,7 @@ export const useUsersStore = defineStore('users', {
             'Content-Type': 'application/json',
             'X-WP-Nonce': wpData.nonce
           },
-          body: JSON.stringify({ role, organization: organizationId })
+          body: JSON.stringify({ role })
         });
         
         if (!response.ok) {
@@ -202,13 +202,13 @@ export const useUsersStore = defineStore('users', {
         
         // Update the user in the list
         const index = this.users.findIndex(user => user.user_id === userId);
-          if (index !== -1) {
-            this.users[index] = { ...this.users[index], ...data, organization: organizationId };
-          }
+        if (index !== -1) {
+          this.users[index] = { ...this.users[index], ...data };
+        }
         
-          if (this.currentUser && this.currentUser.user_id === userId) {
-            this.currentUser = { ...this.currentUser, ...data, organization: organizationId };
-          }
+        if (this.currentUser && this.currentUser.user_id === userId) {
+          this.currentUser = { ...this.currentUser, ...data };
+        }
         
         return data;
       } catch (error) {

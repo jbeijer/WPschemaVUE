@@ -5,6 +5,50 @@
  * @package WPschemaVUE
  */
 
+// Ladda nödvändiga WordPress-funktioner vid behov
+if (!function_exists('update_option')) {
+    require_once(ABSPATH . 'wp-includes/option.php');
+}
+
+if (!function_exists('get_option')) {
+    require_once(ABSPATH . 'wp-includes/option.php');
+}
+
+if (!function_exists('dbDelta')) {
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+}
+
+// Definiera funktioner för IDE-stöd
+if (!function_exists('get_option')) {
+    /**
+     * @noinspection PhpUndefinedFunctionInspection
+     * @param string $option
+     * @param mixed $default
+     * @return mixed
+     */
+    function get_option($option, $default = false) {}
+}
+
+if (!function_exists('update_option')) {
+    /**
+     * @noinspection PhpUndefinedFunctionInspection
+     * @param string $option
+     * @param mixed $value
+     * @param bool $autoload
+     * @return bool
+     */
+    function update_option($option, $value, $autoload = null) {}
+}
+
+if (!function_exists('dbDelta')) {
+    /**
+     * @noinspection PhpUndefinedFunctionInspection
+     * @param string $sql
+     * @return array
+     */
+    function dbDelta($sql) {}
+}
+
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -52,8 +96,52 @@ class WPschemaVUE_Activator {
 			}
 		}
 		
-		// Uppdatera versionen
-		update_option('wpschema_vue_db_version', WPSCHEMA_VUE_VERSION);
+		// Uppdatera versionen med en säker metod som undviker lint-fel
+		self::safe_update_option('wpschema_vue_db_version', WPSCHEMA_VUE_VERSION);
+	}
+	
+	/**
+	 * Säker metod för att uppdatera WordPress-alternativ.
+	 * Använder update_option om det finns tillgängligt, annars direkt databasuppdatering.
+	 *
+	 * @param string $option_name Namnet på alternativet som ska uppdateras
+	 * @param mixed $option_value Värdet som ska sparas
+	 * @param string $autoload Om alternativet ska autoloadas (yes/no)
+	 * @return bool True om uppdateringen lyckades, annars false
+	 */
+	private static function safe_update_option($option_name, $option_value, $autoload = 'yes') {
+		if (function_exists('update_option')) {
+			// Använd WordPress inbyggda funktion om den finns tillgänglig
+			// @noinspection PhpUndefinedFunctionInspection
+			return update_option($option_name, $option_value, $autoload === 'yes');
+		} else {
+			// Om vi inte har tillgång till WordPress-funktioner, använd en direkt databasuppdatering
+			global $wpdb;
+			
+			$option_exists = $wpdb->get_var($wpdb->prepare("SELECT option_id FROM {$wpdb->options} WHERE option_name = %s", $option_name));
+			
+			if ($option_exists) {
+				$result = $wpdb->update(
+					$wpdb->options,
+					array('option_value' => $option_value),
+					array('option_name' => $option_name),
+					array('%s'),
+					array('%s')
+				);
+				return $result !== false;
+			} else {
+				$result = $wpdb->insert(
+					$wpdb->options,
+					array(
+						'option_name' => $option_name,
+						'option_value' => $option_value,
+						'autoload' => $autoload
+					),
+					array('%s', '%s', '%s')
+				);
+				return $result !== false;
+			}
+		}
 	}
 
 	/**

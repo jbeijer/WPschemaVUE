@@ -146,9 +146,11 @@ export default {
       modalSaving: false,
       modalErrorMessage: '',
       roles: [
-        { value: 'base', label: 'Bas' },
+        { value: 'base', label: 'Bas (Anställd)' },
         { value: 'scheduler', label: 'Schemaläggare' },
-        { value: 'admin', label: 'Admin' }
+        { value: 'admin', label: 'Admin' },
+        { value: 'wpschema_anvandare', label: 'WP Schema Användare' },
+        { value: 'schemaanmain', label: 'Schema Admin' }
       ]
     };
   },
@@ -204,6 +206,7 @@ export default {
             this.editedUser.user_id,
             this.editedUser.role
           );
+          await this.usersStore.fetchAllWordPressUsers();
           
           // Show success message
           this.$refs.successMessage.textContent = 'Användarrollen har uppdaterats';
@@ -233,16 +236,19 @@ export default {
       // Handle case when role is undefined or null
       if (!roleValue) return '-';
       
+      // Normalisera rollvärdet till små bokstäver för att matcha våra definierade roller
+      const normalizedRole = typeof roleValue === 'string' ? roleValue.toLowerCase() : roleValue;
+      
       // Find the role in our predefined roles array
-      const role = this.roles.find(r => r.value === roleValue);
+      const role = this.roles.find(r => r.value === normalizedRole);
       if (role) {
         return role.label;
       }
       
-      // If role is not found in our predefined roles, it might be a WordPress role
-      // or a comma-separated list of roles from fetchAllWordPressUsers
-      // Return it as is, with first letter capitalized for each role
-      return roleValue.split(', ')
+      // Om rollen inte finns i våra fördefinierade roller, kan det vara en WordPress-roll
+      // eller en kommaseparerad lista med roller från fetchAllWordPressUsers
+      // Returnera den som den är, med första bokstaven stor för varje roll
+      return String(normalizedRole).split(', ')
         .map(r => r.charAt(0).toUpperCase() + r.slice(1))
         .join(', ');
     }

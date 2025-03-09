@@ -37,58 +37,281 @@ if ( ! function_exists( 'current_user_can' ) ) {
 
 class WPschemaVUE_User_Organization {
 
+    /**
+     * Sparar eller uppdaterar en användares roll i en organisation.
+     * 
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @param string $role Användarens roll i organisationen (base, scheduler, admin)
+     * @return int|bool ID för den nya posten eller true vid uppdatering, false vid fel
+     */
     public static function save_user_organization($user_id, $organization_id, $role) {
+        try {
+            global $wpdb;
+            
+            // Kontrollera att wpdb är tillgängligt
+            if (!isset($wpdb) || !is_object($wpdb)) {
+                error_log('KRITISKT FEL: $wpdb är inte tillgängligt i save_user_organization');
+                return false;
+            }
+            
+            // Kontrollera att tabellen finns
+            $table = $wpdb->prefix . 'schedule_user_organizations';
+            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table'") === $table;
+            
+            if (!$table_exists) {
+                error_log("KRITISKT FEL: Tabellen $table existerar inte");
+                return false;
+            }
+            
+            // Validera indata
+            $user_id = (int) $user_id;
+            $organization_id = (int) $organization_id;
+            $role = sanitize_text_field($role);
+            
+            // Kontrollera att användar-ID och organisations-ID är giltiga
+            if ($user_id <= 0) {
+                error_log("Ogiltigt användar-ID: $user_id");
+                return false;
+            }
+            
+            if ($organization_id <= 0) {
+                error_log("Ogiltigt organisations-ID: $organization_id");
+                return false;
+            }
+            
+            // Normalisera rollvärdet till små bokstäver för att matcha enum-värdena i databasen
+            $role = strtolower($role);
+            
+            // Kontrollera att rollen är ett giltigt enum-värde
+            $valid_roles = array('base', 'scheduler', 'admin', 'wpschema_anvandare', 'schemaanmain');
+            if (!in_array($role, $valid_roles)) {
+                error_log("Ogiltig roll: '$role'. Giltiga roller är: " . implode(', ', $valid_roles) . ". Använder 'base' som standard.");
+                $role = 'base'; // Använd standardrollen om ett ogiltigt värde anges
+            }
+            
+            // Logga för felsökning
+            error_log("Sparar användarorganisation: user_id=$user_id, organization_id=$organization_id, role=$role");
+            
+            // Kontrollera om relationen redan finns
+            $exists_query = $wpdb->prepare("SELECT id FROM $table WHERE user_id = %d AND organization_id = %d", $user_id, $organization_id);
+            error_log("SQL-fråga för att kontrollera om relationen finns: $exists_query");
+            $exists = $wpdb->get_var($exists_query);
+            
+            if ($exists) {
+                // Uppdatera befintlig relation
+                error_log("Uppdaterar befintlig användarorganisation med ID: $exists");
+                
+                // Kontrollera att rollen är giltig för databasen
+                // Hämta kolumninformation för att kontrollera enum-värden
+                $column_info_query = "SHOW COLUMNS FROM $table LIKE 'role'";
+                $column_info = $wpdb->get_row($column_info_query);
+                
+                if ($column_info && isset($column_info->Type)) {
+                    // Extrahera enum-värden från kolumntypen
+                    preg_match("/^enum\((.*)\)$/", $column_info->Type, $matches);
+                    if (isset($matches[1])) {
+                        $enum_values = str_getcsv($matches[1], ',', "'");
+                        error_log("Enum-värden från databasen: " . implode(', ', $enum_values));
+                        
+                        if (!in_array($role, $enum_values)) {
+                            error_log("Rollen '$role' matchar inte något av de tillåtna värdena i databasen. Använder 'base' som standard.");
+                            $role = 'base';
+                        }
+                    }
+                }
+                
+                $update_data = array('role' => $role);
+                $where_data = array('user_id' => $user_id, 'organization_id' => $organization_id);
+                
+                error_log("Försöker uppdatera med data: " . print_r($update_data, true) . ", where: " . print_r($where_data, true));
+                
+                $result = $wpdb->update(
+                    $table, 
+                    $update_data, 
+                    $where_data, 
+                    array('%s'), 
+                    array('%d', '%d')
+                );
+                
+                if ($result === false) {
+                    error_log("Databasfel vid uppdatering av användarorganisation: " . $wpdb->last_error);
+                    return false;
+                }
+                
+                error_log("Uppdatering lyckades. Resultat: $result");
+                return $exists; // Returnera ID för den uppdaterade posten
+            } else {
+                // Skapa ny relation
+                error_log("Skapar ny användarorganisation");
+                
+                // Kontrollera att rollen är giltig för databasen
+                // Hämta kolumninformation för att kontrollera enum-värden
+                $column_info_query = "SHOW COLUMNS FROM $table LIKE 'role'";
+                $column_info = $wpdb->get_row($column_info_query);
+                
+                if ($column_info && isset($column_info->Type)) {
+                    // Extrahera enum-värden från kolumntypen
+                    preg_match("/^enum\((.*)\)$/", $column_info->Type, $matches);
+                    if (isset($matches[1])) {
+                        $enum_values = str_getcsv($matches[1], ',', "'");
+                        error_log("Enum-värden från databasen: " . implode(', ', $enum_values));
+                        
+                        if (!in_array($role, $enum_values)) {
+                            error_log("Rollen '$role' matchar inte något av de tillåtna värdena i databasen. Använder 'base' som standard.");
+                            $role = 'base';
+                        }
+                    }
+                }
+                
+                $data = array(
+                    'user_id'         => $user_id,
+                    'organization_id' => $organization_id,
+                    'role'            => $role
+                );
+                $format = array('%d', '%d', '%s');
+                
+                error_log("Försöker skapa ny post med data: " . print_r($data, true));
+                
+                $result = $wpdb->insert($table, $data, $format);
+                
+                if ($result === false) {
+                    error_log("Databasfel vid skapande av användarorganisation: " . $wpdb->last_error);
+                    return false;
+                }
+                
+                $new_id = $wpdb->insert_id;
+                error_log("Ny användarorganisation skapad med ID: $new_id");
+                return $new_id;
+            }
+        } catch (Exception $e) {
+            error_log('Exception i save_user_organization: ' . $e->getMessage());
+            error_log('Exception stack trace: ' . $e->getTraceAsString());
+            return false;
+        }
+    }
+    /**
+     * Kontrollera om en association mellan användare och organisation existerar
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @return bool True om associationen existerar, false annars
+     */
+    public static function association_exists($user_id, $organization_id) {
         global $wpdb;
         $table = $wpdb->prefix . 'schedule_user_organizations';
-        $data = array(
-            'user_id'         => $user_id,
-            'organization_id' => $organization_id,
-            'role'            => $role
-        );
-        $format = array('%d', '%d', '%s');
-        $exists = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE user_id = %d AND organization_id = %d", $user_id, $organization_id));
-        if ($exists) {
-            $wpdb->update($table, array('role' => $role), array('user_id' => $user_id, 'organization_id' => $organization_id), array('%s'), array('%d', '%d'));
-        } else {
-            $wpdb->insert($table, $data, $format);
-        }
-        return $wpdb->insert_id;
+        
+        $result = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $table WHERE user_id = %d AND organization_id = %d",
+            $user_id,
+            $organization_id
+        ));
+        
+        return (int)$result > 0;
     }
-    // Existerande metoder och egenskaper...
     
     /**
-     * Uppdaterar en användares roll och organisation.
+     * Skapa en ny association mellan användare och organisation
      *
-     * Endpoint: PUT /wp-json/schedule/v1/organizations/{orgId}/users/{userId}
-     *
-     * Förväntade parametrar:
-     * - orgId (från route)
-     * - userId (från route)
-     * - role (i request body, JSON)
-     *
-     * @param WP_REST_Request $request
-     * @return WP_REST_Response|WP_Error
+     * @param array $data Associationsdata (user_id, organization_id, role)
+     * @return int|bool ID för den nya associationen eller false vid fel
      */
-    public static function update_user_organization_role( $request ) {
-        $orgId = (int) $request['orgId'];
-        $userId = (int) $request['userId'];
-        $params = $request->get_json_params();
-        $role = isset($params['role']) ? sanitize_text_field($params['role']) : '';
-        if ( empty( $role ) ) {
-            return new WP_Error( 'no_role', 'Role is required', array( 'status' => 400 ) );
+    public static function create_association($data) {
+        // Använd save_user_organization för att skapa associationen
+        return self::save_user_organization($data['user_id'], $data['organization_id'], $data['role']);
+    }
+    
+    /**
+     * Hämta alla användare för en organisation
+     *
+     * @param int $organization_id Organisations-ID
+     * @return array Lista med användare och deras roller
+     */
+    public static function get_organization_users($organization_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'schedule_user_organizations';
+        
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT uo.*, u.display_name, u.user_email 
+             FROM $table uo
+             JOIN {$wpdb->users} u ON uo.user_id = u.ID
+             WHERE uo.organization_id = %d",
+            $organization_id
+        ));
+        
+        if (!$results) {
+            return array();
         }
         
-        wp_update_user( array( 'ID' => $userId, 'role' => $role ) );
-        update_user_meta( $userId, 'organization_id', $orgId );
-        self::save_user_organization($userId, $orgId, $role);
+        $users = array();
+        foreach ($results as $row) {
+            $users[] = array(
+                'user_id' => (int)$row->user_id,
+                'organization_id' => (int)$row->organization_id,
+                'role' => $row->role,
+                'user_data' => array(
+                    'display_name' => $row->display_name,
+                    'user_email' => $row->user_email
+                )
+            );
+        }
         
-        return rest_ensure_response( array(
-            'success' => true,
-            'userId'  => $userId,
-            'orgId'   => $orgId,
-            'role'    => $role,
-            'organization' => $orgId,
-        ) );
+        return $users;
+    }
+    
+    /**
+     * Hämta användarens roll i en organisation
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @return string|null Användarens roll eller null om användaren inte finns i organisationen
+     */
+    public static function get_user_role($user_id, $organization_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'schedule_user_organizations';
+        
+        $role = $wpdb->get_var($wpdb->prepare(
+            "SELECT role FROM $table WHERE user_id = %d AND organization_id = %d",
+            $user_id,
+            $organization_id
+        ));
+        
+        return $role;
+    }
+    
+    /**
+     * Hämta alla organisationer för en användare
+     *
+     * @param int $user_id Användar-ID
+     * @return array Lista med organisationer och användarens roller
+     */
+    public static function get_user_organizations($user_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'schedule_user_organizations';
+        $org_table = $wpdb->prefix . 'schedule_organizations';
+        
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT uo.*, o.name as organization_name
+             FROM $table uo
+             JOIN $org_table o ON uo.organization_id = o.id
+             WHERE uo.user_id = %d",
+            $user_id
+        ));
+        
+        if (!$results) {
+            return array();
+        }
+        
+        $organizations = array();
+        foreach ($results as $row) {
+            $organizations[] = array(
+                'id' => (int)$row->organization_id,
+                'name' => $row->organization_name,
+                'role' => $row->role
+            );
+        }
+        
+        return $organizations;
     }
     
     /**
@@ -99,9 +322,9 @@ class WPschemaVUE_User_Organization {
      * @param string $role Roll att kontrollera.
      * @return bool True om användaren har rollen, false annars.
      */
-    public function user_has_role($user_id, $organization_id, $role) {
-        // Dummy-implementation; anpassa efter behov.
-        return false;
+    public static function user_has_role($user_id, $organization_id, $role) {
+        $user_role = self::get_user_role($user_id, $organization_id);
+        return $user_role === $role;
     }
     
     /**
@@ -109,12 +332,70 @@ class WPschemaVUE_User_Organization {
      *
      * @param int $user_id Användar-ID.
      * @param int $organization_id Organisations-ID.
-     * @param string $min_role Minsta roll att kontrollera.
+     * @param string $min_role Minsta roll att kontrollera (base, scheduler, admin).
      * @return bool True om användaren har minst den angivna rollen, false annars.
      */
-    public function user_has_min_role($user_id, $organization_id, $min_role) {
-        // Dummy-implementation; anpassa efter behov.
-        return false;
+    public static function user_has_min_role($user_id, $organization_id, $min_role) {
+        $user_role = self::get_user_role($user_id, $organization_id);
+        
+        if (!$user_role) {
+            return false;
+        }
+        
+        // Definiera rollhierarkin
+        $role_hierarchy = array(
+            'base' => 1,
+            'scheduler' => 2,
+            'admin' => 3
+        );
+        
+        // Kontrollera om användarens roll är minst lika hög som den efterfrågade
+        return isset($role_hierarchy[$user_role]) && 
+               isset($role_hierarchy[$min_role]) && 
+               $role_hierarchy[$user_role] >= $role_hierarchy[$min_role];
+    }
+    
+    /**
+     * Ta bort en användares koppling till en organisation
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @return bool True om borttagningen lyckades, false annars
+     */
+    public static function delete_user_organization($user_id, $organization_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'schedule_user_organizations';
+        
+        // Validera indata
+        $user_id = (int) $user_id;
+        $organization_id = (int) $organization_id;
+        
+        // Logga för felsökning
+        error_log("Tar bort användarorganisation: user_id=$user_id, organization_id=$organization_id");
+        
+        // Kontrollera först om relationen finns
+        if (!self::association_exists($user_id, $organization_id)) {
+            error_log("Användarorganisation finns inte: user_id=$user_id, organization_id=$organization_id");
+            return false;
+        }
+        
+        // Ta bort relationen
+        $result = $wpdb->delete(
+            $table,
+            array(
+                'user_id' => $user_id,
+                'organization_id' => $organization_id
+            ),
+            array('%d', '%d')
+        );
+        
+        if ($result === false) {
+            error_log("Databasfel vid borttagning av användarorganisation: " . $wpdb->last_error);
+            return false;
+        }
+        
+        error_log("Användarorganisation borttagen: user_id=$user_id, organization_id=$organization_id");
+        return true;
     }
 }
     
