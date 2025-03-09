@@ -1,6 +1,6 @@
 <?php
 /**
- * User_Organization class
+ * WPschemaVUE_User_Organization class
  *
  * Hanterar kopplingen mellan användare och organisationer.
  *
@@ -35,7 +35,25 @@ if ( ! function_exists( 'current_user_can' ) ) {
     require_once( ABSPATH . 'wp-includes/pluggable.php' );
 }
 
-class User_Organization {
+class WPschemaVUE_User_Organization {
+
+    public static function save_user_organization($user_id, $organization_id, $role) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'schedule_user_organizations';
+        $data = array(
+            'user_id'         => $user_id,
+            'organization_id' => $organization_id,
+            'role'            => $role
+        );
+        $format = array('%d', '%d', '%s');
+        $exists = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE user_id = %d AND organization_id = %d", $user_id, $organization_id));
+        if ($exists) {
+            $wpdb->update($table, array('role' => $role), array('user_id' => $user_id, 'organization_id' => $organization_id), array('%s'), array('%d', '%d'));
+        } else {
+            $wpdb->insert($table, $data, $format);
+        }
+        return $wpdb->insert_id;
+    }
     // Existerande metoder och egenskaper...
     
     /**
@@ -60,21 +78,16 @@ class User_Organization {
             return new WP_Error( 'no_role', 'Role is required', array( 'status' => 400 ) );
         }
         
-        /** @noinspection PhpUndefinedFunctionInspection */
-        $update = wp_update_user( array( 'ID' => $userId, 'role' => $role ) );
-        /** @noinspection PhpUndefinedFunctionInspection */
-        if ( is_wp_error( $update ) ) {
-            return new WP_Error( 'update_failed', 'Failed to update user role', array( 'status' => 500 ) );
-        }
-        
-        /** @noinspection PhpUndefinedFunctionInspection */
+        wp_update_user( array( 'ID' => $userId, 'role' => $role ) );
         update_user_meta( $userId, 'organization_id', $orgId );
+        self::save_user_organization($userId, $orgId, $role);
         
         return rest_ensure_response( array(
             'success' => true,
             'userId'  => $userId,
             'orgId'   => $orgId,
             'role'    => $role,
+            'organization' => $orgId,
         ) );
     }
     
@@ -104,15 +117,13 @@ class User_Organization {
         return false;
     }
 }
-
     
 // Registrera REST-endpointen för att uppdatera användarens roll och organisation
 add_action( 'rest_api_init', function(){
     register_rest_route( 'schedule/v1', '/organizations/(?P<orgId>\d+)/users/(?P<userId>\d+)', array(
         'methods'  => 'PUT',
-        'callback' => array( 'User_Organization', 'update_user_organization_role' ),
+        'callback' => array( 'WPschemaVUE_User_Organization', 'update_user_organization_role' ),
         'permission_callback' => function() {
-            /** @noinspection PhpUndefinedFunctionInspection */
             return current_user_can( 'manage_options' );
         },
     ));

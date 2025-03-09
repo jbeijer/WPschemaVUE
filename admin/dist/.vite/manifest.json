@@ -20,8 +20,8 @@
       "index.html"
     ]
   },
-  "_users-CbUdu0qE.js": {
-    "file": "js/users-CbUdu0qE.js",
+  "_users-CpADfs9v.js": {
+    "file": "js/users-CpADfs9v.js",
     "name": "users",
     "imports": [
       "index.html"
@@ -45,12 +45,12 @@
     ]
   },
   "src/views/Dashboard.vue": {
-    "file": "js/Dashboard-DCaKs2OJ.js",
+    "file": "js/Dashboard-CtBfoiNs.js",
     "name": "Dashboard",
     "src": "src/views/Dashboard.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_users-CbUdu0qE.js",
+      "_users-CpADfs9v.js",
       "_organizations-B3pHQGhl.js",
       "_schedules-C0GYZ6UX.js",
       "index.html"
@@ -60,13 +60,13 @@
     ]
   },
   "src/views/Organizations.vue": {
-    "file": "js/Organizations-C_RYEWeF.js",
+    "file": "js/Organizations-DKjjX7kV.js",
     "name": "Organizations",
     "src": "src/views/Organizations.vue",
     "isDynamicEntry": true,
     "imports": [
       "_organizations-B3pHQGhl.js",
-      "_users-CbUdu0qE.js",
+      "_users-CpADfs9v.js",
       "_resources-DiZVBBdZ.js",
       "index.html"
     ],
@@ -89,14 +89,14 @@
     ]
   },
   "src/views/Schedules.vue": {
-    "file": "js/Schedules-DudhYW_x.js",
+    "file": "js/Schedules-CLohCGPz.js",
     "name": "Schedules",
     "src": "src/views/Schedules.vue",
     "isDynamicEntry": true,
     "imports": [
       "_resources-DiZVBBdZ.js",
       "_schedules-C0GYZ6UX.js",
-      "_users-CbUdu0qE.js",
+      "_users-CpADfs9v.js",
       "_organizations-B3pHQGhl.js",
       "index.html"
     ],
@@ -105,12 +105,12 @@
     ]
   },
   "src/views/Settings.vue": {
-    "file": "js/Settings-BTY2VAWj.js",
+    "file": "js/Settings-D13fKor0.js",
     "name": "Settings",
     "src": "src/views/Settings.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_users-CbUdu0qE.js",
+      "_users-CpADfs9v.js",
       "index.html"
     ],
     "css": [
@@ -118,13 +118,13 @@
     ]
   },
   "src/views/UserManagement.vue": {
-    "file": "js/UserManagement-C8aqSeFk.js",
+    "file": "js/UserManagement-DcZr1p-K.js",
     "name": "UserManagement",
     "src": "src/views/UserManagement.vue",
     "isDynamicEntry": true,
     "imports": [
       "_organizations-B3pHQGhl.js",
-      "_users-CbUdu0qE.js",
+      "_users-CpADfs9v.js",
       "index.html"
     ],
     "css": [

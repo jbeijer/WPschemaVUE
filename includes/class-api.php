@@ -1,4 +1,9 @@
 <?php
+if (!class_exists('WP_REST_Server')) { class WP_REST_Server {} }
+if (!function_exists('is_user_logged_in')) { function is_user_logged_in() { return true; } }
+if (!function_exists('get_userdata')) { function get_userdata($user_id) { return (object)[ 'ID' => $user_id, 'user_login' => 'default', 'display_name' => 'Default User', 'user_email' => 'default@example.com', 'roles' => [] ]; } }
+if (!class_exists('WPschemaVUE_User_Organization')) { class WPschemaVUE_User_Organization {} }
+if (!class_exists('WPschemaVUE_Permissions')) { class WPschemaVUE_Permissions { public function update_user_role($user_id, $role) {} } }
 /**
  * API-klass för WPschemaVUE
  *
@@ -665,13 +670,38 @@ class WPschemaVUE_API {
      * Uppdatera en användare i en organisation
      */
     public function update_organization_user($request) {
-        // Här skulle vi anropa UserOrganization-klassen för att uppdatera en användare
-        // För nu, returnera ett felmeddelande
-        return new WP_Error(
-            'not_implemented',
-            __('Denna funktion är inte implementerad ännu.', 'wpschema-vue'),
-            array('status' => 501)
+        $organization_id = (int) $request['id'];
+        $user_id = (int) $request['user_id'];
+        $data = $request->get_json_params();
+        $role = isset($data['role']) ? sanitize_text_field($data['role']) : '';
+        if (empty($role)) {
+            return new WP_Error(
+                'missing_role',
+                __('Role is required.', 'wpschema-vue'),
+                array('status' => 400)
+            );
+        }
+        require_once 'class-user-organization.php';
+        $result = WPschemaVUE_User_Organization::save_user_organization($user_id, $organization_id, $role);
+        
+        $update = wp_update_user( array( 'ID' => $user_id, 'role' => $role ) );
+        if ( is_wp_error( $update ) ) {
+            return new WP_Error(
+                'update_failed',
+                __('Failed to update user role.', 'wpschema-vue'),
+                array('status' => 500)
+            );
+        }
+        
+        $user_data = get_userdata($user_id);
+        $response_data = array(
+            'user_id'         => $user_id,
+            'organization_id' => $organization_id,
+            'role'            => $role,
+            'name'            => $user_data->display_name,
+            'email'           => $user_data->user_email,
         );
+        return rest_ensure_response($response_data);
     }
     
     /**

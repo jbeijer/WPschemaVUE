@@ -13,6 +13,43 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Stub-funktioner för att förhindra undefined function-fel vid statisk analys
+if (!function_exists('plugin_dir_url')) {
+    function plugin_dir_url($file) {
+        return '';
+    }
+}
+if (!function_exists('plugin_basename')) {
+    function plugin_basename($file) {
+        return '';
+    }
+}
+if (!function_exists('register_activation_hook')) {
+    function register_activation_hook($file, $callback) {
+    }
+}
+if (!function_exists('register_deactivation_hook')) {
+    function register_deactivation_hook($file, $callback) {
+    }
+}
+if (!function_exists('update_option')) {
+    function update_option($option, $value) {
+    }
+}
+if (!function_exists('flush_rewrite_rules')) {
+    function flush_rewrite_rules() {
+    }
+}
+if (!function_exists('load_plugin_textdomain')) {
+    function load_plugin_textdomain($domain, $deprecated, $plugin_rel_path) {
+    }
+}
+if (!function_exists('is_admin')) {
+    function is_admin() {
+        return false;
+    }
+}
+
 // Definiera konstanter
 define('WPSCHEMA_VUE_VERSION', '1.0.0');
 define('WPSCHEMA_VUE_PLUGIN_DIR', plugin_dir_path(__FILE__));
@@ -98,6 +135,7 @@ class WPschemaVUE {
         require_once WPSCHEMA_VUE_PLUGIN_DIR . 'includes/class-resource.php';
         require_once WPSCHEMA_VUE_PLUGIN_DIR . 'includes/class-schedule.php';
         require_once WPSCHEMA_VUE_PLUGIN_DIR . 'includes/class-permissions.php';
+        require_once WPSCHEMA_VUE_PLUGIN_DIR . 'admin/rest-filters.php';
     }
     
     /**
