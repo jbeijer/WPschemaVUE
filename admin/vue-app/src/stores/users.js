@@ -8,7 +8,8 @@ export const useUsersStore = defineStore('users', {
     currentUser: null,
     currentOrganizationId: null,
     currentUserInfo: null,
-    allUsers: [] // New state to store all users from all organizations
+    allUsers: [], // New state to store all users from all organizations
+    userOrganizations: {} // New state to store user-organization relationships
   }),
   
   getters: {
@@ -17,7 +18,13 @@ export const useUsersStore = defineStore('users', {
     
     // Get user by ID
     getUserById: (state) => (id) => {
-      return state.users.find(user => user.user_id === id);
+      return state.users.find(user => user.user_id === id || user.id === id);
+    },
+    
+    // Get user's role in organization
+    getUserInOrganization: (state) => (userId, organizationId) => {
+      const key = `${userId}-${organizationId}`;
+      return state.userOrganizations[key] || null;
     },
     
     // Get users by role
@@ -55,8 +62,43 @@ export const useUsersStore = defineStore('users', {
         }
         
         const data = await response.json();
-        this.users = data;
-        return data;
+        
+        // Hämta alla organisationer för varje användare
+        const usersWithOrgs = await Promise.all(data.map(async (user) => {
+          const orgsResponse = await fetch(`${wpData.rest_url}schedule/v1/users/${user.user_id}/organizations`, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-Nonce': wpData.nonce
+            }
+          });
+          
+          let organizations = [];
+          if (orgsResponse.ok) {
+            const orgsData = await orgsResponse.json();
+            organizations = orgsData.map(org => org.id);
+          }
+          
+          return {
+            ...user,
+            organization_id: organizationId,
+            organizations: organizations
+          };
+        }));
+        
+        this.users = usersWithOrgs;
+        
+        // Update userOrganizations state
+        usersWithOrgs.forEach(user => {
+          const key = `${user.user_id}-${organizationId}`;
+          this.userOrganizations[key] = {
+            role: user.role,
+            organization_id: organizationId
+          };
+        });
+        
+        return usersWithOrgs;
       } catch (error) {
         console.error(`Error fetching users for organization ${organizationId}:`, error);
         this.error = error.message;
@@ -73,8 +115,9 @@ export const useUsersStore = defineStore('users', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        // Use the WordPress REST API to fetch all users
-        const response = await fetch(`${wpData.rest_url}wp/v2/users?per_page=100`, {
+        
+        // Hämta alla WordPress-användare
+        const usersResponse = await fetch(`${wpData.rest_url}wp/v2/users?per_page=100`, {
           method: 'GET',
           credentials: 'same-origin',
           headers: {
@@ -83,26 +126,101 @@ export const useUsersStore = defineStore('users', {
           }
         });
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!usersResponse.ok) {
+          throw new Error(`HTTP error! status: ${usersResponse.status}`);
         }
         
-        const data = await response.json();
-        // Transform the data to match our expected format
-        this.allUsers = data.map(user => ({
-          id: user.id,
-          user_id: user.id,
-          user_data: {
-            display_name: user.name,
-            user_email: user.email || user.slug + '@example.com' // Email might be hidden for privacy
-          },
-          role: user.roles ? user.roles.join(', ') : '' // WordPress roles, check if roles exists
-        }));
+        const usersData = await usersResponse.json();
         
-        // Also set as current users for display
-        this.users = this.allUsers;
+        // Hämta alla organisationer
+        const orgsResponse = await fetch(`${wpData.rest_url}schedule/v1/organizations`, {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-WP-Nonce': wpData.nonce
+          }
+        });
         
-        return this.allUsers;
+        if (!orgsResponse.ok) {
+          throw new Error(`HTTP error! status: ${orgsResponse.status}`);
+        }
+        
+        const organizations = await orgsResponse.json();
+        
+        // Hämta användarroller för varje organisation
+        const userPromises = organizations.map(async (org) => {
+          try {
+            const orgUsersResponse = await fetch(`${wpData.rest_url}schedule/v1/organizations/${org.id}/users`, {
+              method: 'GET',
+              credentials: 'same-origin',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-WP-Nonce': wpData.nonce
+              }
+            });
+            
+            if (orgUsersResponse.ok) {
+              const orgUsers = await orgUsersResponse.json();
+              return orgUsers.map(user => ({
+                ...user,
+                organization_id: org.id
+              }));
+            }
+            return [];
+          } catch (error) {
+            console.error(`Error fetching users for organization ${org.id}:`, error);
+            return [];
+          }
+        });
+        
+        const orgUsersArrays = await Promise.all(userPromises);
+        
+        // Kombinera all användarinformation
+        const usersWithRoles = usersData.map(user => {
+          const userRoles = [];
+          const userOrgs = [];
+          const userOrgRoles = {};
+          
+          // Hitta användarens roller och organisationer
+          orgUsersArrays.forEach(orgUsers => {
+            const orgUser = orgUsers.find(ou => ou.user_id === user.id);
+            if (orgUser) {
+              userRoles.push(orgUser.role);
+              userOrgs.push(orgUser.organization_id);
+              userOrgRoles[orgUser.organization_id] = orgUser.role;
+            }
+          });
+          
+          return {
+            id: user.id,
+            user_id: user.id,
+            user_data: {
+              display_name: user.name,
+              user_email: user.email || user.slug + '@example.com'
+            },
+            role: userRoles.join(', ') || '',
+            organization_id: userOrgs[0] || null,
+            organizations: userOrgs,
+            organization_roles: userOrgRoles
+          };
+        });
+        
+        this.users = usersWithRoles;
+        
+        // Uppdatera userOrganizations state
+        this.userOrganizations = {};
+        orgUsersArrays.forEach(orgUsers => {
+          orgUsers.forEach(user => {
+            const key = `${user.user_id}-${user.organization_id}`;
+            this.userOrganizations[key] = {
+              role: user.role,
+              organization_id: user.organization_id
+            };
+          });
+        });
+        
+        return this.users;
       } catch (error) {
         console.error('Error fetching all WordPress users:', error);
         this.error = error.message;
@@ -183,6 +301,12 @@ export const useUsersStore = defineStore('users', {
       this.error = null;
       
       try {
+        // Validera rollen
+        const validRoles = ['base', 'scheduler', 'admin', 'wpschema_anvandare', 'schemaanmain'];
+        if (!validRoles.includes(role)) {
+          throw new Error(`Ogiltig roll. Giltiga roller är: ${validRoles.join(', ')}`);
+        }
+
         const wpData = window.wpScheduleData || {};
         const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${organizationId}/users/${userId}`, {
           method: 'PUT',
@@ -195,24 +319,40 @@ export const useUsersStore = defineStore('users', {
         });
         
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorData = await response.json();
+          throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
         
-        // Update the user in the list
-        const index = this.users.findIndex(user => user.user_id === userId);
+        // Update user in the list and userOrganizations state
+        const key = `${userId}-${organizationId}`;
+        this.userOrganizations[key] = {
+          role: role,
+          organization_id: organizationId
+        };
+        
+        const index = this.users.findIndex(user => (user.user_id === userId || user.id === userId));
         if (index !== -1) {
-          this.users[index] = { ...this.users[index], ...data };
+          this.users[index] = {
+            ...this.users[index],
+            role: role,
+            organization_id: organizationId
+          };
         }
         
-        if (this.currentUser && this.currentUser.user_id === userId) {
-          this.currentUser = { ...this.currentUser, ...data };
+        // Update currentUser if it matches
+        if (this.currentUser && (this.currentUser.user_id === userId || this.currentUser.id === userId)) {
+          this.currentUser = {
+            ...this.currentUser,
+            role: role,
+            organization_id: organizationId
+          };
         }
         
         return data;
       } catch (error) {
-        console.error(`Error updating user role for user ${userId}:`, error);
+        console.error(`Fel vid uppdatering av användarroll för användare ${userId}:`, error);
         this.error = error.message;
         throw error;
       } finally {
