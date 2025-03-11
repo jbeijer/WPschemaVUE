@@ -2,10 +2,6 @@
   <div class="user-management">
     <h2>Användarhantering</h2>
     
-    <div ref="successMessage" class="success-message" style="display: none;">
-      Användarrollen har uppdaterats
-    </div>
-    
     <div class="organization-selector">
       <label for="organization-select">Filtrera efter organisation:</label>
       <select 
@@ -44,15 +40,15 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="user in users" :key="user.id">
+        <tr v-for="user in users" :key="user.user_id || user.id || user.user_data?.ID">
           <td>{{ user.user_data?.display_name }}</td>
           <td>{{ user.user_data?.user_email }}</td>
-          <td>{{ getRoleLabel(user.role || getUserRoleInOrg(user.user_id || user.id)) }}</td>
+          <td>{{ getRoleLabel(user.role || getUserRoleInOrg(user.user_id || user.id || user.user_data?.ID)) }}</td>
           <td>{{ getOrganizationName(user.organization_id) }}</td>
           <td>
             <button 
               class="button button-primary"
-              @click="openEditModal(user)"
+              @click="handleEditClick(user)"
               v-if="hasPermission('manage_options')"
             >
               Redigera
@@ -66,73 +62,88 @@
       Inga användare hittades.
     </div>
 
-    <!-- Modal backdrop -->
-    <div v-if="showEditModal" class="modal-backdrop" @click="showEditModal = false"></div>
-    
-    <!-- Edit User Modal -->
-    <div v-if="showEditModal" class="permission-modal">
-      <h3>Redigera användare: {{ selectedUser.user_data?.display_name }}</h3>
-      
-      <div v-if="modalErrorMessage" class="error-message" style="margin-bottom: 1rem;">
-        {{ modalErrorMessage }}
+    <!-- Modal för redigering av användare -->
+    <div v-if="showEditModal" class="modal-backdrop" @click="closeEditModal"></div>
+    <div v-if="showEditModal" class="edit-modal">
+      <div class="modal-header">
+        <h3>Redigera användare: {{ selectedUser?.user_data?.display_name }}</h3>
+        <button class="close-button" @click="closeEditModal">&times;</button>
       </div>
-      
-      <div v-if="editedUser.organization" class="current-org">
-        <label>Nuvarande organisation:</label>
-        <div class="org-controls">
+
+      <div class="modal-content">
+        <div v-if="modalError" class="error-message">
+          {{ modalError }}
+        </div>
+
+        <!-- Nuvarande organisation -->
+        <div v-if="selectedUser?.organization_id" class="current-org">
+          <h4>Nuvarande organisation</h4>
           <div class="org-info">
-            <span>{{ getOrganizationName(editedUser.organization) }}</span>
-            <select v-model="editedUser.role" class="role-select" :disabled="modalSaving">
+            <span>{{ getOrganizationName(selectedUser.organization_id) }}</span>
+            <select v-model="selectedUser.role" class="role-select">
               <option v-for="role in roles" :key="role.value" :value="role.value">
                 {{ role.label }}
               </option>
             </select>
           </div>
-          <button 
-            type="button" 
-            class="button button-link-delete" 
-            @click="confirmRemoveFromOrg(editedUser.organization)"
-            :disabled="modalSaving"
-          >
-            Ta bort från organisation
-          </button>
         </div>
-      </div>
-      
-      <div class="other-orgs" v-if="userOrganizations && userOrganizations.length > 0">
-        <label>Andra organisationer:</label>
-        <div class="orgs-list">
-          <div v-for="org in userOrganizations" :key="org.id" class="org-item" v-if="org.id !== editedUser.organization">
+
+        <!-- Lista över alla organisationer -->
+        <div class="organizations-list">
+          <h4>Organisationer</h4>
+          <div v-for="orgId in selectedUser?.organizations || []" :key="orgId" class="org-item">
             <div class="org-info">
-              <span>{{ org.name }}</span>
-              <span class="org-role">({{ getRoleLabel(org.role) }})</span>
+              <span>{{ getOrganizationName(orgId) }}</span>
+              <span class="org-role">({{ getRoleLabel(selectedUser?.organization_roles?.[orgId]) }})</span>
             </div>
             <button 
-              type="button" 
-              class="button button-link-delete" 
-              @click="confirmRemoveFromOrg(org.id)"
-              :disabled="modalSaving"
+              v-if="orgId !== selectedUser?.organization_id"
+              class="button button-link-delete"
+              @click="removeFromOrg(orgId)"
             >
               Ta bort
             </button>
           </div>
         </div>
+
+        <!-- Lägg till i ny organisation -->
+        <div class="add-org">
+          <h4>Lägg till i organisation</h4>
+          <div class="add-org-controls">
+            <select v-model="newOrgId" class="org-select">
+              <option value="">Välj organisation</option>
+              <option 
+                v-for="org in availableOrganizations" 
+                :key="org.id" 
+                :value="org.id"
+              >
+                {{ org.name }}
+              </option>
+            </select>
+            <select v-model="newOrgRole" class="role-select">
+              <option v-for="role in roles" :key="role.value" :value="role.value">
+                {{ role.label }}
+              </option>
+            </select>
+            <button 
+              class="button button-primary"
+              @click="addToOrg"
+              :disabled="!newOrgId || !newOrgRole"
+            >
+              Lägg till
+            </button>
+          </div>
+        </div>
       </div>
-      
-      <div class="add-to-org" style="margin-top: 1rem;">
-        <label>Lägg till i organisation:</label>
-        <select v-model="editedUser.organization" class="org-select" :disabled="modalSaving">
-          <option v-for="org in availableOrganizations" :key="org.id" :value="org.id">
-            {{ org.name }}
-          </option>
-        </select>
-      </div>
-      
-      <div style="margin-top: 1rem;">
-        <button class="button" @click="closeEditModal" :disabled="modalSaving">Avbryt</button>
-        <button class="button button-primary" @click="saveUserChanges" :disabled="modalSaving">
-          <span v-if="modalSaving">Sparar...</span>
-          <span v-else>Spara</span>
+
+      <div class="modal-footer">
+        <button class="button" @click="closeEditModal">Avbryt</button>
+        <button 
+          class="button button-primary" 
+          @click="saveChanges"
+          :disabled="saving"
+        >
+          {{ saving ? 'Sparar...' : 'Spara ändringar' }}
         </button>
       </div>
     </div>
@@ -176,10 +187,10 @@ export default {
       selectedOrgId: '',
       showEditModal: false,
       selectedUser: null,
-      editedUser: null,
-      modalSaving: false,
-      modalErrorMessage: '',
-      userOrganizations: [],
+      modalError: '',
+      saving: false,
+      newOrgId: '',
+      newOrgRole: 'base',
       roles: [
         { value: 'base', label: 'Bas (Anställd)' },
         { value: 'scheduler', label: 'Schemaläggare' },
@@ -192,19 +203,14 @@ export default {
   computed: {
     availableOrganizations() {
       if (!this.organizations) return [];
-      const currentOrgs = this.userOrganizations.map(org => org.id);
+      const currentOrgs = this.selectedUser?.organizations || [];
       return this.organizations.filter(org => !currentOrgs.includes(org.id));
     }
   },
   async mounted() {
     try {
-      // Fetch current user info first
       await this.usersStore.fetchCurrentUserInfo();
-      
-      // Fetch organizations when component mounts
       await this.organizationsStore.fetchOrganizations();
-      
-      // Fetch all WordPress users by default
       await this.usersStore.fetchAllWordPressUsers();
     } catch (error) {
       console.error('Kunde inte hämta data:', error);
@@ -219,83 +225,94 @@ export default {
           console.error('Kunde inte hämta användare:', error);
         }
       } else {
-        // Show all users when no organization is selected
         await this.usersStore.fetchAllWordPressUsers();
       }
     },
-    async openEditModal(user) {
-      this.selectedUser = user;
-      // Create a deep copy of the user to avoid modifying the original
-      this.editedUser = {
-        ...JSON.parse(JSON.stringify(user)),
-        user_id: user.user_id || user.id,
-        organization: user.organization_id || this.selectedOrgId || '',
-        role: user.role || 'base'
-      };
-      
-      // Använd befintlig data från users store istället för att göra ett nytt API-anrop
-      this.userOrganizations = [];
-      if (user.organizations) {
-        this.userOrganizations = user.organizations.map(orgId => {
-          const org = this.organizations.find(o => o.id === orgId);
-          return {
-            id: orgId,
-            name: org ? org.name : '',
-            role: user.organization_roles?.[orgId] || 'base'
-          };
-        });
-      }
-      
-      this.modalErrorMessage = '';
-      this.modalSaving = false;
+    handleEditClick(user) {
+      this.selectedUser = { ...user };
       this.showEditModal = true;
+      this.modalError = '';
     },
     closeEditModal() {
       this.showEditModal = false;
       this.selectedUser = null;
-      this.editedUser = null;
+      this.modalError = '';
+      this.newOrgId = '';
+      this.newOrgRole = 'base';
     },
-    async saveUserChanges() {
-      this.modalSaving = true;
-      this.modalErrorMessage = '';
+    async addToOrg() {
+      if (!this.newOrgId || !this.newOrgRole) return;
       
       try {
-        if (this.editedUser.organization) {
-          // If an organization is selected, update the user's role and organization
-          await this.usersStore.updateUserRole(
-            this.editedUser.organization,
-            this.editedUser.user_id,
-            this.editedUser.role
-          );
-          
-          // Uppdatera användarlistan baserat på vald organisation
-          if (this.selectedOrgId) {
-            await this.usersStore.fetchUsersByOrganization(this.selectedOrgId);
-          } else {
-            await this.usersStore.fetchAllWordPressUsers();
-          }
-          
-          // Show success message
-          this.$refs.successMessage.textContent = 'Användarrollen har uppdaterats';
-          this.$refs.successMessage.style.display = 'block';
-          
-          // Hide success message after 3 seconds
-          setTimeout(() => {
-            if (this.$refs.successMessage) {
-              this.$refs.successMessage.style.display = 'none';
-            }
-          }, 3000);
-          
-          this.closeEditModal();
-        } else {
-          // If no organization is selected, show error message in modal
-          this.modalErrorMessage = 'Du måste välja en organisation för att uppdatera användarrollen';
-          this.modalSaving = false;
+        await this.usersStore.updateUserRole(
+          this.newOrgId,
+          this.selectedUser.user_id,
+          this.newOrgRole
+        );
+
+        // Uppdatera selectedUser med den nya organisationen
+        this.selectedUser.organizations = [...(this.selectedUser.organizations || []), this.newOrgId];
+        this.selectedUser.organization_roles = {
+          ...this.selectedUser.organization_roles,
+          [this.newOrgId]: this.newOrgRole
+        };
+
+        // Återställ formuläret
+        this.newOrgId = '';
+        this.newOrgRole = 'base';
+      } catch (error) {
+        this.modalError = `Kunde inte lägga till användaren i organisationen: ${error.message}`;
+      }
+    },
+    async removeFromOrg(orgId) {
+      if (!confirm(`Är du säker på att du vill ta bort användaren från ${this.getOrganizationName(orgId)}?`)) {
+        return;
+      }
+
+      try {
+        await this.usersStore.removeUserFromOrganization(orgId, this.selectedUser.user_id);
+        
+        // Uppdatera selectedUser
+        this.selectedUser.organizations = this.selectedUser.organizations.filter(id => id !== orgId);
+        delete this.selectedUser.organization_roles[orgId];
+        
+        // Om det var den nuvarande organisationen, rensa den
+        if (orgId === this.selectedUser.organization_id) {
+          this.selectedUser.organization_id = null;
+          this.selectedUser.role = null;
         }
       } catch (error) {
-        console.error('Uppdatering misslyckades:', error);
-        this.modalErrorMessage = `Uppdatering misslyckades: ${error.message || 'Okänt fel'}`;
-        this.modalSaving = false;
+        this.modalError = `Kunde inte ta bort användaren från organisationen: ${error.message}`;
+      }
+    },
+    async saveChanges() {
+      if (!this.selectedUser.organization_id) {
+        this.modalError = 'Välj en organisation för användaren';
+        return;
+      }
+
+      this.saving = true;
+      this.modalError = '';
+
+      try {
+        await this.usersStore.updateUserRole(
+          this.selectedUser.organization_id,
+          this.selectedUser.user_id,
+          this.selectedUser.role
+        );
+
+        // Uppdatera användarlistan
+        if (this.selectedOrgId) {
+          await this.usersStore.fetchUsersByOrganization(this.selectedOrgId);
+        } else {
+          await this.usersStore.fetchAllWordPressUsers();
+        }
+
+        this.closeEditModal();
+      } catch (error) {
+        this.modalError = `Kunde inte spara ändringarna: ${error.message}`;
+      } finally {
+        this.saving = false;
       }
     },
     getUserRoleInOrg(userId) {
@@ -303,82 +320,22 @@ export default {
       const userInOrg = this.usersStore.getUserInOrganization(userId, this.selectedOrgId);
       return userInOrg ? userInOrg.role : null;
     },
-    // Map role value to human-readable label
     getRoleLabel(roleValue) {
-      // Handle case when role is undefined or null
       if (!roleValue) return '-';
-      
-      // Normalisera rollvärdet till små bokstäver för att matcha våra definierade roller
       const normalizedRole = typeof roleValue === 'string' ? roleValue.toLowerCase() : roleValue;
-      
-      // Find the role in our predefined roles array
       const role = this.roles.find(r => r.value === normalizedRole);
       if (role) {
         return role.label;
       }
-      
-      // Om rollen inte finns i våra fördefinierade roller, kan det vara en WordPress-roll
-      // eller en kommaseparerad lista med roller från fetchAllWordPressUsers
-      // Returnera den som den är, med första bokstaven stor för varje roll
       return String(normalizedRole).split(', ')
         .map(r => r.charAt(0).toUpperCase() + r.slice(1))
         .join(', ');
-    },
-    confirmRemoveFromOrg(orgId) {
-      if (confirm(`Är du säker på att du vill ta bort användaren från ${this.getOrganizationName(orgId)}?`)) {
-        this.removeFromOrg(orgId);
-      }
-    },
-    async removeFromOrg(orgId) {
-      this.modalSaving = true;
-      try {
-        await this.usersStore.removeUserFromOrganization(orgId, this.editedUser.user_id);
-        
-        // Uppdatera userOrganizations listan
-        this.userOrganizations = this.userOrganizations.filter(org => org.id !== orgId);
-        
-        // Om det var den nuvarande organisationen, rensa den
-        if (orgId === this.editedUser.organization) {
-          this.editedUser.organization = '';
-          this.editedUser.role = '';
-        }
-        
-        // Uppdatera användarlistan
-        if (this.selectedOrgId) {
-          await this.usersStore.fetchUsersByOrganization(this.selectedOrgId);
-        } else {
-          await this.usersStore.fetchAllWordPressUsers();
-        }
-      } catch (error) {
-        this.modalErrorMessage = `Kunde inte ta bort användaren från organisationen: ${error.message}`;
-      } finally {
-        this.modalSaving = false;
-      }
     }
   }
 };
 </script>
 
 <style scoped>
-.permission-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 2rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    z-index: 1000;
-}
-
-.role-select {
-    padding: 0.5rem;
-    margin-left: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-}
-
 .organization-selector {
     margin-bottom: 1.5rem;
 }
@@ -393,8 +350,7 @@ export default {
 
 .loading-message,
 .error-message,
-.no-users-message,
-.select-org-message {
+.no-users-message {
     padding: 1rem;
     margin: 1rem 0;
     border-radius: 4px;
@@ -411,47 +367,77 @@ export default {
     color: #721c24;
 }
 
-.success-message {
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
-    color: #155724;
-}
-
-.no-users-message,
-.select-org-message {
+.no-users-message {
     background-color: #e2e3e5;
     border: 1px solid #d6d8db;
     color: #383d41;
 }
 
 .modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 999;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
 }
 
-.current-org,
-.other-orgs {
-  margin-bottom: 1rem;
+.edit-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
-.org-controls {
+.modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
+  margin-bottom: 1.5rem;
 }
 
-.orgs-list {
-  margin-top: 0.5rem;
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  line-height: 1;
+}
+
+.modal-content {
+  margin-bottom: 1.5rem;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  border-top: 1px solid #dee2e6;
+  padding-top: 1rem;
+}
+
+.current-org,
+.organizations-list,
+.add-org {
+  margin-bottom: 1.5rem;
+}
+
+.org-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .org-item {
@@ -469,7 +455,20 @@ export default {
 .org-role {
   color: #6c757d;
   font-size: 0.9em;
-  margin-left: 0.5rem;
+}
+
+.add-org-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.role-select,
+.org-select {
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  min-width: 150px;
 }
 
 .button-link-delete {
@@ -485,10 +484,5 @@ export default {
   text-decoration: underline;
   background-color: #f8d7da;
   border-radius: 4px;
-}
-
-.button-link-delete:disabled {
-  color: #6c757d;
-  cursor: not-allowed;
 }
 </style>
