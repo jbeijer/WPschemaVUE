@@ -302,7 +302,7 @@ export const useUsersStore = defineStore('users', {
       
       try {
         // Validera rollen
-        const validRoles = ['base', 'scheduler', 'admin', 'wpschema_anvandare', 'schemaanmain'];
+        const validRoles = ['base', 'schemalaggare', 'schemaanmain'];
         if (!validRoles.includes(role)) {
           throw new Error(`Ogiltig roll. Giltiga roller är: ${validRoles.join(', ')}`);
         }

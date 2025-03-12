@@ -193,9 +193,7 @@ export default {
       newOrgRole: 'base',
       roles: [
         { value: 'base', label: 'Bas (Anställd)' },
-        { value: 'scheduler', label: 'Schemaläggare' },
-        { value: 'admin', label: 'Admin' },
-        { value: 'wpschema_anvandare', label: 'WP Schema Användare' },
+        { value: 'schemalaggare', label: 'Schemaläggare' },
         { value: 'schemaanmain', label: 'Schema Admin' }
       ]
     };
@@ -288,6 +286,13 @@ export default {
     async saveChanges() {
       if (!this.selectedUser.organization_id) {
         this.modalError = 'Välj en organisation för användaren';
+        return;
+      }
+
+      // Validera att rollen är giltig
+      const validRoles = ['base', 'schemalaggare', 'schemaanmain'];
+      if (!validRoles.includes(this.selectedUser.role)) {
+        this.modalError = 'Ogiltig roll. Vänligen välj en giltig roll.';
         return;
       }
 
