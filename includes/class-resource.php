@@ -123,10 +123,15 @@ class WPschemaVUE_Resource {
         
         // Lägg till färg om den finns
         if (!empty($data['color'])) {
-            // Validera färgformat (#RRGGBB)
-            if (preg_match('/^#[0-9a-f]{6}$/i', $data['color'])) {
-                $insert_data['color'] = $data['color'];
+            // Validera färg
+            if (!preg_match('/^#[0-9a-f]{6}$/i', $data['color'])) {
+                return new WP_Error(
+                    'invalid_color',
+                    __('Färgvärdet måste vara en giltig hex-färg (t.ex. #FF0000).', 'wpschema-vue'),
+                    array('status' => 400)
+                );
             }
+            $insert_data['color'] = $data['color'];
         }
         
         // Sätt in i databasen
@@ -172,10 +177,15 @@ class WPschemaVUE_Resource {
         
         // Uppdatera färg om den finns
         if (!empty($data['color'])) {
-            // Validera färgformat (#RRGGBB)
-            if (preg_match('/^#[0-9a-f]{6}$/i', $data['color'])) {
-                $update_data['color'] = $data['color'];
+            // Validera färg
+            if (!preg_match('/^#[0-9a-f]{6}$/i', $data['color'])) {
+                return new WP_Error(
+                    'invalid_color',
+                    __('Färgvärdet måste vara en giltig hex-färg (t.ex. #FF0000).', 'wpschema-vue'),
+                    array('status' => 400)
+                );
             }
+            $update_data['color'] = $data['color'];
         }
         
         // Uppdatera i databasen

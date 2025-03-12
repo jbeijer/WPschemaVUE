@@ -900,13 +900,58 @@ class WPschemaVUE_API {
      * Skapa en resurs
      */
     public function create_resource($request) {
-        // Här skulle vi anropa Resource-klassen för att skapa en resurs
-        // För nu, returnera ett felmeddelande
-        return new WP_Error(
-            'not_implemented',
-            __('Denna funktion är inte implementerad ännu.', 'wpschema-vue'),
-            array('status' => 501)
-        );
+        $organization_id = (int) $request['organization_id'];
+        $data = $request->get_json_params();
+        
+        // Logga för felsökning
+        error_log("Skapar resurs för organisation: organization_id=$organization_id, data=" . print_r($data, true));
+        
+        require_once 'class-resource.php';
+        $resource = new WPschemaVUE_Resource();
+        
+        // Lägg till organization_id i data
+        $data['organization_id'] = $organization_id;
+        
+        // Validera färg om den finns
+        if (!empty($data['color'])) {
+            if (!preg_match('/^#[0-9a-f]{6}$/i', $data['color'])) {
+                return new WP_Error(
+                    'rest_invalid_param',
+                    __('Invalid parameter(s): color', 'wpschema-vue'),
+                    array('status' => 400)
+                );
+            }
+        }
+        
+        // Skapa resursen
+        $resource_id = $resource->create_resource($data);
+        
+        if (!$resource_id) {
+            error_log("Fel vid skapande av resurs");
+            return new WP_Error(
+                'create_failed',
+                __('Kunde inte skapa resursen.', 'wpschema-vue'),
+                array('status' => 500)
+            );
+        }
+        
+        // Hämta den skapade resursen
+        $created_resource = $resource->get_resource($resource_id);
+        
+        if (!$created_resource) {
+            error_log("Kunde inte hämta den skapade resursen");
+            return new WP_Error(
+                'fetch_failed',
+                __('Resursen skapades men kunde inte hämtas.', 'wpschema-vue'),
+                array('status' => 500)
+            );
+        }
+        
+        error_log("Resurs skapad framgångsrikt: " . print_r($created_resource, true));
+        return rest_ensure_response(array(
+            'success' => true,
+            'data' => $created_resource
+        ));
     }
     
     /**

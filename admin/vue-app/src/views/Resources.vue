@@ -52,6 +52,9 @@
             <button class="btn btn-small" @click="viewSchedules(resource)">
               Visa schema
             </button>
+            <button class="btn btn-small" @click="manageAvailability(resource)">
+              Hantera tillgänglighet
+            </button>
             <button class="btn btn-small" @click="editResource(resource)">
               Redigera
             </button>
@@ -159,15 +162,35 @@
         </div>
       </div>
     </div>
+    
+    <!-- Availability Modal -->
+    <div class="modal" v-if="showAvailabilityModal">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3>Hantera tillgänglighet</h3>
+          <button class="close-button" @click="showAvailabilityModal = false">&times;</button>
+        </div>
+        <div class="modal-body">
+          <ResourceAvailability 
+            v-if="selectedResource"
+            :resource="selectedResource"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { useOrganizationsStore } from '@/stores/organizations';
 import { useResourcesStore } from '@/stores/resources';
+import ResourceAvailability from '@/components/ResourceAvailability.vue';
 
 export default {
   name: 'Resources',
+  components: {
+    ResourceAvailability
+  },
   data() {
     return {
       loading: false,
@@ -190,7 +213,9 @@ export default {
         description: '',
         color: '#3788d8'
       },
-      resourceToDelete: null
+      resourceToDelete: null,
+      showAvailabilityModal: false,
+      selectedResource: null
     };
   },
   computed: {
@@ -259,6 +284,12 @@ export default {
     async createResource() {
       if (!this.selectedOrganizationId) {
         alert('Välj en organisation först.');
+        return;
+      }
+      
+      // Validera färgvärdet
+      if (!this.newResource.color.match(/^#[0-9A-Fa-f]{6}$/)) {
+        alert('Färgvärdet måste vara i formatet #RRGGBB (t.ex. #3788d8)');
         return;
       }
       
@@ -341,6 +372,11 @@ export default {
         name: 'schedules',
         query: { resource: resource.id }
       });
+    },
+    
+    manageAvailability(resource) {
+      this.selectedResource = resource;
+      this.showAvailabilityModal = true;
     }
   },
   watch: {
@@ -602,5 +638,10 @@ export default {
 .warning {
   color: #dc3545;
   font-weight: bold;
+}
+
+.modal-large {
+  max-width: 800px;
+  width: 90%;
 }
 </style>

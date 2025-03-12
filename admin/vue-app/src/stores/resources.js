@@ -6,7 +6,8 @@ export const useResourcesStore = defineStore('resources', {
     loading: false,
     error: null,
     currentResource: null,
-    currentOrganizationId: null
+    currentOrganizationId: null,
+    availabilities: {}
   }),
   
   getters: {
@@ -24,7 +25,12 @@ export const useResourcesStore = defineStore('resources', {
     },
     
     // Check if resources are loading
-    isLoading: (state) => state.loading
+    isLoading: (state) => state.loading,
+
+    // Get availability for a resource
+    getAvailability: (state) => (resourceId) => {
+      return state.availabilities[resourceId];
+    }
   },
   
   actions: {
@@ -36,7 +42,12 @@ export const useResourcesStore = defineStore('resources', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${organizationId}/resources`, {
+        console.log('Fetching resources with wpData:', wpData);
+        
+        const url = `${wpData.rest_url}schedule/v1/organizations/${organizationId}/resources`;
+        console.log('Request URL:', url);
+        
+        const response = await fetch(url, {
           method: 'GET',
           credentials: 'same-origin',
           headers: {
@@ -45,13 +56,27 @@ export const useResourcesStore = defineStore('resources', {
           }
         });
         
+        console.log('Response status:', response.status);
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
-        this.resources = data;
-        return data;
+        console.log('API Response:', data);
+        
+        // Hantera både array-svar och success/data-svar
+        if (Array.isArray(data)) {
+          this.resources = data;
+          return data;
+        } else if (data && data.success) {
+          this.resources = data.data;
+          return data.data;
+        } else {
+          const errorMessage = data?.error?.message || 'Ett okänt fel uppstod vid hämtning av resurser';
+          console.error('API Error:', data);
+          throw new Error(errorMessage);
+        }
       } catch (error) {
         console.error(`Error fetching resources for organization ${organizationId}:`, error);
         this.error = error.message;
@@ -109,23 +134,75 @@ export const useResourcesStore = defineStore('resources', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/organizations/${organizationId}/resources`, {
+        
+        const formattedData = {
+          name: resourceData.name,
+          description: resourceData.description || '',
+          color: resourceData.color && /^#[0-9A-Fa-f]{6}$/.test(resourceData.color) 
+            ? resourceData.color 
+            : '#3788d8'
+        };
+        
+        console.log('Creating resource with data:', {
+          organizationId,
+          formattedData,
+          wpData
+        });
+        
+        const url = `${wpData.rest_url}schedule/v1/organizations/${organizationId}/resources`;
+        console.log('Request URL:', url);
+        
+        // Logga request body
+        const requestBody = JSON.stringify(formattedData);
+        console.log('Request body:', requestBody);
+        
+        const response = await fetch(url, {
           method: 'POST',
           credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
             'X-WP-Nonce': wpData.nonce
           },
-          body: JSON.stringify(resourceData)
+          body: requestBody
         });
         
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+        
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorData = await response.json().catch(() => null);
+          console.error('Error response:', errorData);
+          
+          // Hantera specifika felmeddelanden från API:et
+          if (errorData?.code === 'rest_invalid_param') {
+            const paramErrors = errorData.data?.params || {};
+            console.error('Parameter errors:', paramErrors);
+            const errorMessages = Object.entries(paramErrors)
+              .map(([param, details]) => `${param}: ${details}`)
+              .join(', ');
+            throw new Error(`Valideringsfel: ${errorMessages}`);
+          }
+          
+          throw new Error(errorData?.message || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
-        this.resources.push(data);
-        return data;
+        console.log('API Response:', data);
+        
+        // Hantera både array-svar och success/data-svar
+        if (Array.isArray(data)) {
+          const newResource = data[0]; // Ta första resursen från arrayen
+          this.resources.push(newResource);
+          return newResource;
+        } else if (data && data.success) {
+          this.resources.push(data.data);
+          return data.data;
+        } else if (data && data.data) {
+          this.resources.push(data.data);
+          return data.data;
+        } else {
+          throw new Error(data?.error?.message || 'Ett okänt fel uppstod vid skapande av resurs');
+        }
       } catch (error) {
         console.error('Error creating resource:', error);
         this.error = error.message;
@@ -136,13 +213,13 @@ export const useResourcesStore = defineStore('resources', {
     },
     
     // Update a resource
-    async updateResource(id, resourceData) {
+    async updateResource(resourceId, resourceData) {
       this.loading = true;
       this.error = null;
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/resources/${id}`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/resources/${resourceId}`, {
           method: 'PUT',
           credentials: 'same-origin',
           headers: {
@@ -157,20 +234,17 @@ export const useResourcesStore = defineStore('resources', {
         }
         
         const data = await response.json();
-        
-        // Update the resource in the list
-        const index = this.resources.findIndex(resource => resource.id === id);
-        if (index !== -1) {
-          this.resources[index] = data;
+        if (data.success) {
+          const index = this.resources.findIndex(r => r.id === resourceId);
+          if (index !== -1) {
+            this.resources[index] = data.data;
+          }
+          return data.data;
+        } else {
+          throw new Error(data.error?.message || 'Ett okänt fel uppstod vid uppdatering av resurs');
         }
-        
-        if (this.currentResource && this.currentResource.id === id) {
-          this.currentResource = data;
-        }
-        
-        return data;
       } catch (error) {
-        console.error(`Error updating resource ${id}:`, error);
+        console.error('Error updating resource:', error);
         this.error = error.message;
         throw error;
       } finally {
@@ -179,13 +253,13 @@ export const useResourcesStore = defineStore('resources', {
     },
     
     // Delete a resource
-    async deleteResource(id) {
+    async deleteResource(resourceId) {
       this.loading = true;
       this.error = null;
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}/resources/${id}`, {
+        const response = await fetch(`${wpData.rest_url}schedule/v1/resources/${resourceId}`, {
           method: 'DELETE',
           credentials: 'same-origin',
           headers: {
@@ -198,16 +272,15 @@ export const useResourcesStore = defineStore('resources', {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        // Remove the resource from the list
-        this.resources = this.resources.filter(resource => resource.id !== id);
-        
-        if (this.currentResource && this.currentResource.id === id) {
-          this.currentResource = null;
+        const data = await response.json();
+        if (data.success) {
+          this.resources = this.resources.filter(r => r.id !== resourceId);
+          return true;
+        } else {
+          throw new Error(data.error?.message || 'Ett okänt fel uppstod vid borttagning av resurs');
         }
-        
-        return true;
       } catch (error) {
-        console.error(`Error deleting resource ${id}:`, error);
+        console.error('Error deleting resource:', error);
         this.error = error.message;
         throw error;
       } finally {
@@ -228,6 +301,67 @@ export const useResourcesStore = defineStore('resources', {
     // Set current organization ID
     setCurrentOrganizationId(organizationId) {
       this.currentOrganizationId = organizationId;
+    },
+
+    // Fetch availability for a resource
+    async fetchAvailability(resourceId) {
+      try {
+        const wpData = window.wpScheduleData || {};
+        const response = await fetch(`${wpData.rest_url}schedule/v1/resources/${resourceId}/availability`, {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-WP-Nonce': wpData.nonce
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+          this.availabilities[resourceId] = data.data;
+          return data.data;
+        } else {
+          throw new Error(data.error?.message || 'Ett okänt fel uppstod vid hämtning av tillgänglighet');
+        }
+      } catch (error) {
+        console.error(`Error fetching availability for resource ${resourceId}:`, error);
+        throw error;
+      }
+    },
+
+    // Save availability for a resource
+    async saveAvailability(resourceId, availabilityData) {
+      try {
+        const wpData = window.wpScheduleData || {};
+        const response = await fetch(`${wpData.rest_url}schedule/v1/resources/${resourceId}/availability`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-WP-Nonce': wpData.nonce
+          },
+          body: JSON.stringify(availabilityData)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+          this.availabilities[resourceId] = data.data;
+          return data.data;
+        } else {
+          throw new Error(data.error?.message || 'Ett okänt fel uppstod vid sparande av tillgänglighet');
+        }
+      } catch (error) {
+        console.error(`Error saving availability for resource ${resourceId}:`, error);
+        throw error;
+      }
     }
   }
 });
