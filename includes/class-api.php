@@ -5,6 +5,7 @@ if (!function_exists('is_wp_error')) { function is_wp_error($thing) { return $th
 if (!function_exists('rest_ensure_response')) { function rest_ensure_response($response) { return $response; } }
 if (!function_exists('is_user_logged_in')) { function is_user_logged_in() { return true; } }
 if (!function_exists('get_userdata')) { function get_userdata($user_id) { return (object)[ 'ID' => $user_id, 'user_login' => 'default', 'display_name' => 'Default User', 'user_email' => 'default@example.com', 'roles' => [] ]; } }
+if (!function_exists('get_user_by')) { function get_user_by($field, $value) { return get_userdata($value); } }
 if (!class_exists('WPschemaVUE_User_Organization')) { class WPschemaVUE_User_Organization {} }
 if (!class_exists('WPschemaVUE_Permissions')) { class WPschemaVUE_Permissions { public function update_user_role($user_id, $role) {} } }
 /**
@@ -19,6 +20,9 @@ if (!class_exists('WPschemaVUE_Permissions')) { class WPschemaVUE_Permissions { 
 if (!defined('ABSPATH')) {
     exit;
 }
+
+// Inkludera WordPress-funktioner
+require_once ABSPATH . 'wp-includes/pluggable.php';
 
 /**
  * API-klass
@@ -100,10 +104,26 @@ class WPschemaVUE_API {
         
         register_rest_route($this->namespace, '/organizations/(?P<id>\d+)/users/(?P<user_id>\d+)', array(
             array(
-                'methods' => 'PUT, PATCH',
+                'methods' => 'PUT',
                 'callback' => array($this, 'update_organization_user'),
                 'permission_callback' => array($this, 'check_admin_permission'),
-                'args' => $this->get_user_organization_args(),
+                'args' => array(
+                    'id' => array(
+                        'validate_callback' => function($param) {
+                            return is_numeric($param);
+                        }
+                    ),
+                    'user_id' => array(
+                        'validate_callback' => function($param) {
+                            return is_numeric($param);
+                        }
+                    ),
+                    'role' => array(
+                        'required' => true,
+                        'type' => 'string',
+                        'enum' => array('base', 'schemalaggare', 'schemaanmain')
+                    )
+                )
             ),
             array(
                 'methods' => 'DELETE',
@@ -192,6 +212,22 @@ class WPschemaVUE_API {
                 'methods' => 'GET',
                 'callback' => array($this, 'get_current_user_info'),
                 'permission_callback' => array($this, 'check_user_logged_in'),
+            ),
+        ));
+
+        // Hämta användarens organisationer
+        register_rest_route($this->namespace, '/users/(?P<user_id>\d+)/organizations', array(
+            array(
+                'methods' => 'GET',
+                'callback' => array($this, 'get_user_organizations'),
+                'permission_callback' => array($this, 'check_admin_permission'),
+                'args' => array(
+                    'user_id' => array(
+                        'validate_callback' => function($param) {
+                            return is_numeric($param);
+                        }
+                    ),
+                ),
             ),
         ));
     }
@@ -326,7 +362,7 @@ class WPschemaVUE_API {
             'role' => array(
                 'required' => true,
                 'type' => 'string',
-                'enum' => array('base', 'scheduler', 'admin'),
+                'enum' => array('base', 'schemalaggare', 'schemaanmain'),
             ),
         );
     }
@@ -703,17 +739,15 @@ class WPschemaVUE_API {
      */
     public function update_organization_user($request) {
         try {
-            global $wpdb;
             $organization_id = (int) $request['id'];
             $user_id = (int) $request['user_id'];
             $data = $request->get_json_params();
-            $role = isset($data['role']) ? sanitize_text_field($data['role']) : '';
             
             // Logga inkommande data för felsökning
             error_log('Uppdaterar användarroll - Rå data: ' . print_r($data, true));
-            error_log('Uppdaterar användarroll: user_id=' . $user_id . ', organization_id=' . $organization_id . ', role=' . $role);
+            error_log('Uppdaterar användarroll: user_id=' . $user_id . ', organization_id=' . $organization_id);
             
-            if (empty($role)) {
+            if (empty($data['role'])) {
                 error_log('Fel: Roll saknas i förfrågan');
                 return new WP_Error(
                     'missing_role',
@@ -722,60 +756,48 @@ class WPschemaVUE_API {
                 );
             }
             
-            // Normalisera rollvärdet till små bokstäver för att matcha enum-värdena i databasen
+            $role = sanitize_text_field($data['role']);
+            
+            // Normalisera rollvärdet till små bokstäver
             $role = strtolower($role);
             
-            // Hämta de exakta enum-värdena från databasen
-            $user_organizations_table = $wpdb->prefix . 'schedule_user_organizations';
-            $column_info = $wpdb->get_row("SHOW COLUMNS FROM $user_organizations_table LIKE 'role'");
-            $valid_roles = array('base', 'scheduler', 'admin', 'wpschema_anvandare', 'schemaanmain'); // Standardvärden
+            // Definiera giltiga roller
+            $valid_roles = array('base', 'schemalaggare', 'schemaanmain');
             
-            if ($column_info && isset($column_info->Type)) {
-                // Extrahera enum-värden från kolumntypen
-                preg_match("/^enum\((.*)\)$/", $column_info->Type, $matches);
-                if (isset($matches[1])) {
-                    $enum_values = str_getcsv($matches[1], ',', "'");
-                    if (!empty($enum_values)) {
-                        $valid_roles = $enum_values;
-                        error_log("Enum-värden från databasen: " . implode(', ', $valid_roles));
-                    }
-                }
+            if (!in_array($role, $valid_roles)) {
+                error_log('Ogiltig roll: ' . $role);
+                return new WP_Error(
+                    'invalid_role',
+                    __('Ogiltig roll. Giltiga roller är: ' . implode(', ', $valid_roles), 'wpschema-vue'),
+                    array('status' => 400)
+                );
             }
             
-            // Kontrollera att rollen är ett giltigt enum-värde
-            if (!in_array($role, $valid_roles)) {
-                error_log("Ogiltig roll: '$role'. Giltiga roller är: " . implode(', ', $valid_roles));
-                
-                // Försök att mappa rollen till ett giltigt värde
-                $role_mapping = array(
-                    'bas' => 'base',
-                    'schemaläggare' => 'scheduler',
-                    'schemalagare' => 'scheduler',
-                    'anställd' => 'base',
-                    'anstalld' => 'base',
-                    'wpschema-användare' => 'wpschema_anvandare',
-                    'wpschema-anvandare' => 'wpschema_anvandare',
-                    'schema-admin' => 'schemaanmain',
-                    'schemaadmin' => 'schemaanmain'
+            // Kontrollera att användaren finns
+            $user = get_user_by('id', $user_id);
+            if (!$user) {
+                error_log('Användare hittades inte: ' . $user_id);
+                return new WP_Error(
+                    'user_not_found',
+                    __('Användaren kunde inte hittas.', 'wpschema-vue'),
+                    array('status' => 404)
                 );
-                
-                if (isset($role_mapping[$role])) {
-                    $role = $role_mapping[$role];
-                    error_log("Mappade rollen till: $role");
-                } else {
-                    // Om vi inte kan mappa rollen, använd standardrollen 'base'
-                    error_log("Kunde inte mappa rollen, använder 'base' som standard");
-                    $role = 'base';
-                }
-                
-                // Kontrollera igen efter mappning
-                if (!in_array($role, $valid_roles)) {
-                    return new WP_Error(
-                        'invalid_role',
-                        __('Ogiltig roll. Giltiga roller är: ' . implode(', ', $valid_roles), 'wpschema-vue'),
-                        array('status' => 400)
-                    );
-                }
+            }
+            
+            // Kontrollera att organisationen finns
+            global $wpdb;
+            $organization = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}schedule_organizations WHERE id = %d",
+                $organization_id
+            ));
+            
+            if (!$organization) {
+                error_log('Organisation hittades inte: ' . $organization_id);
+                return new WP_Error(
+                    'organization_not_found',
+                    __('Organisationen kunde inte hittas.', 'wpschema-vue'),
+                    array('status' => 404)
+                );
             }
             
             require_once 'class-user-organization.php';
@@ -790,26 +812,24 @@ class WPschemaVUE_API {
                 );
             }
             
-            // Vi uppdaterar inte WordPress-rollen längre eftersom vi använder vår egen rollhantering
-            // $update = wp_update_user(array('ID' => $user_id, 'role' => $role));
-            
+            // Hämta uppdaterad användardata
             $user_data = get_userdata($user_id);
             if (!$user_data) {
-                error_log('Fel: Kunde inte hämta användardata för användare med ID: ' . $user_id);
+                error_log('Kunde inte hämta användardata för användare: ' . $user_id);
                 return new WP_Error(
-                    'user_not_found',
+                    'user_data_error',
                     __('Kunde inte hämta användardata.', 'wpschema-vue'),
-                    array('status' => 404)
+                    array('status' => 500)
                 );
             }
             
             $response_data = array(
-                'user_id'         => $user_id,
+                'user_id' => $user_id,
                 'organization_id' => $organization_id,
-                'role'            => $role,
-                'user_data'       => array(
+                'role' => $role,
+                'user_data' => array(
                     'display_name' => $user_data->display_name,
-                    'user_email'   => $user_data->user_email,
+                    'user_email' => $user_data->user_email
                 )
             );
             
@@ -818,10 +838,9 @@ class WPschemaVUE_API {
             
         } catch (Exception $e) {
             error_log('Exception i update_organization_user: ' . $e->getMessage());
-            error_log('Exception stack trace: ' . $e->getTraceAsString());
             return new WP_Error(
                 'server_error',
-                __('Ett serverfel inträffade: ' . $e->getMessage(), 'wpschema-vue'),
+                __('Ett serverfel uppstod: ' . $e->getMessage(), 'wpschema-vue'),
                 array('status' => 500)
             );
         }
@@ -1019,5 +1038,32 @@ class WPschemaVUE_API {
         );
         
         return rest_ensure_response($user_data);
+    }
+
+    /**
+     * Hämta alla organisationer för en specifik användare
+     */
+    public function get_user_organizations($request) {
+        $user_id = $request['user_id'];
+        
+        // Kontrollera att användaren finns
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            return new WP_Error(
+                'user_not_found',
+                __('Användaren hittades inte.', 'wpschema-vue'),
+                array('status' => 404)
+            );
+        }
+        
+        // Hämta användarens organisationer
+        $user_organization = new WPschemaVUE_User_Organization();
+        $organizations = $user_organization->get_user_organizations($user_id);
+        
+        if (empty($organizations)) {
+            return rest_ensure_response(array());
+        }
+        
+        return rest_ensure_response($organizations);
     }
 }

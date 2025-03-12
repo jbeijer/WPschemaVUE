@@ -41,9 +41,13 @@ class WPschemaVUE {
     public function activate() {
         // Inkludera aktivator-klassen
         require_once WPSCHEMA_VUE_PLUGIN_DIR . 'includes/class-activator.php';
+        require_once WPSCHEMA_VUE_PLUGIN_DIR . 'includes/fix-roles.php';
         
         // Kör aktiveringsrutinen
         WPschemaVUE_Activator::activate();
+        
+        // Kör fix för roller
+        fix_user_roles();
         
         // Spara aktiveringsversion för framtida uppdateringar
         update_option('wpschema_vue_version', WPSCHEMA_VUE_VERSION);
@@ -133,6 +137,59 @@ function wpschema_vue_register_custom_roles() {
     $permissions = new WPschemaVUE_Permissions();
     $permissions->register_roles();
 }
+
+// Ta bort de föråldrade filtren och använd den nya rekommenderade metoden
+add_filter('rest_authentication_errors', function($errors) {
+    // Tillåt REST API
+    return $errors;
+});
+
+// Lägg till CORS-headers för REST API
+add_action('rest_api_init', function() {
+    error_log('REST API init körs');
+    
+    remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
+    add_filter('rest_pre_serve_request', function($value) {
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE');
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization, X-WP-Nonce');
+        return $value;
+    });
+}, 15);
+
+// Registrera REST API endpoints direkt i huvudfilen
+add_action('rest_api_init', function() {
+    error_log('Registrerar REST routes i huvudfilen');
+    
+    require_once WPSCHEMA_VUE_PLUGIN_DIR . 'admin/class-admin.php';
+    $admin = new WPschemaVUE_Admin();
+    
+    register_rest_route('schedule/v1', '/users/create', array(
+        'methods' => 'POST',
+        'callback' => array($admin, 'create_user'),
+        'permission_callback' => function() {
+            return current_user_can('manage_options');
+        },
+        'args' => array(
+            'email' => array(
+                'required' => true,
+                'type' => 'string',
+                'sanitize_callback' => 'sanitize_email'
+            ),
+            'first_name' => array(
+                'required' => true,
+                'type' => 'string',
+                'sanitize_callback' => 'sanitize_text_field'
+            ),
+            'last_name' => array(
+                'required' => true,
+                'type' => 'string',
+                'sanitize_callback' => 'sanitize_text_field'
+            )
+        )
+    ));
+});
 
 // Starta pluginet
 $wpschema_vue = new WPschemaVUE();

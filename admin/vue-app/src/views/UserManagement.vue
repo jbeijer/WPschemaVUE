@@ -1,6 +1,15 @@
 <template>
   <div class="user-management">
-    <h2>Användarhantering</h2>
+    <div class="header-actions">
+      <h2>Användarhantering</h2>
+      <button 
+        class="button button-primary"
+        @click="showCreateModal = true"
+        v-if="hasPermission('manage_options')"
+      >
+        Skapa ny användare
+      </button>
+    </div>
     
     <div class="organization-selector">
       <label for="organization-select">Filtrera efter organisation:</label>
@@ -195,6 +204,98 @@
         </button>
       </div>
     </div>
+
+    <!-- Modal för skapande av ny användare -->
+    <div v-if="showCreateModal" class="modal-backdrop" @click="closeCreateModal"></div>
+    <div v-if="showCreateModal" class="edit-modal">
+      <div class="modal-header">
+        <h3>Skapa ny användare</h3>
+        <button class="close-button" @click="closeCreateModal">&times;</button>
+      </div>
+
+      <div class="modal-content">
+        <div v-if="createModalError" class="error-message">
+          {{ createModalError }}
+        </div>
+
+        <div class="form-group">
+          <label for="first-name">Förnamn</label>
+          <input 
+            type="text" 
+            id="first-name" 
+            v-model="newUser.firstName" 
+            class="form-control"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="last-name">Efternamn</label>
+          <input 
+            type="text" 
+            id="last-name" 
+            v-model="newUser.lastName" 
+            class="form-control"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="email">E-post</label>
+          <input 
+            type="email" 
+            id="email" 
+            v-model="newUser.email" 
+            class="form-control"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="create-org-select">Organisation</label>
+          <select 
+            id="create-org-select" 
+            v-model="newUser.organizationId" 
+            class="form-control"
+            required
+          >
+            <option value="">Välj organisation</option>
+            <option 
+              v-for="org in organizations" 
+              :key="org.id" 
+              :value="org.id"
+            >
+              {{ org.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="create-org-role">Roll i organisation</label>
+          <select 
+            id="create-org-role" 
+            v-model="newUser.organizationRole" 
+            class="form-control"
+            required
+          >
+            <option value="base">Bas (Anställd)</option>
+            <option value="schemalaggare">Schemaläggare</option>
+            <option value="schemaanmain">Schema Admin</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="button" @click="closeCreateModal">Avbryt</button>
+        <button 
+          class="button button-primary" 
+          @click="createUser"
+          :disabled="saving || !isValidNewUser"
+        >
+          {{ saving ? 'Skapar...' : 'Skapa användare' }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -234,12 +335,21 @@ export default {
     return {
       selectedOrgId: '',
       showEditModal: false,
+      showCreateModal: false,
       selectedUser: null,
       modalError: '',
+      createModalError: '',
       saving: false,
       newOrgId: '',
       newOrgRole: 'base',
       expandedUsers: [],
+      newUser: {
+        firstName: '',
+        lastName: '',
+        email: '',
+        organizationId: '',
+        organizationRole: 'base'
+      },
       roles: [
         { value: 'base', label: 'Bas (Anställd)' },
         { value: 'schemalaggare', label: 'Schemaläggare' },
@@ -252,6 +362,19 @@ export default {
       if (!this.organizations) return [];
       const currentOrgs = this.selectedUser?.organizations || [];
       return this.organizations.filter(org => !currentOrgs.includes(org.id));
+    },
+    isValidNewUser() {
+      return (
+        this.newUser.firstName.trim() &&
+        this.newUser.lastName.trim() &&
+        this.newUser.email.trim() &&
+        this.newUser.organizationId &&
+        this.newUser.organizationRole
+      );
+    },
+    wpNonce() {
+      // Hämta nonce från det globala wpScheduleData objektet som injiceras av WordPress
+      return window.wpScheduleData?.nonce || '';
     }
   },
   async mounted() {
@@ -471,12 +594,84 @@ export default {
       };
       
       return permissions[role] || ['Inga specifika behörigheter'];
+    },
+    closeCreateModal() {
+      this.showCreateModal = false;
+      this.createModalError = '';
+      this.newUser = {
+        firstName: '',
+        lastName: '',
+        email: '',
+        organizationId: '',
+        organizationRole: 'base'
+      };
+    },
+    async createUser() {
+      if (!this.isValidNewUser) return;
+      
+      this.saving = true;
+      this.createModalError = '';
+
+      try {
+        if (!this.wpNonce) {
+          throw new Error('Säkerhetsverifiering saknas. Vänligen ladda om sidan.');
+        }
+
+        const restUrl = (window.wpScheduleData?.rest_url || '/wp-json').replace(/\/+$/, '');
+        
+        // Skapa användaren via WordPress API
+        const response = await fetch(`${restUrl}/schedule/v1/users/create`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-WP-Nonce': this.wpNonce
+          },
+          body: JSON.stringify({
+            email: this.newUser.email,
+            first_name: this.newUser.firstName,
+            last_name: this.newUser.lastName
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Kunde inte skapa användaren');
+        }
+
+        const userData = await response.json();
+
+        // Lägg till användaren i organisationen
+        await this.usersStore.updateUserRole(
+          this.newUser.organizationId,
+          userData.id,
+          this.newUser.organizationRole
+        );
+
+        // Visa bekräftelse och stäng modal
+        this.showSuccessMessage('Användaren har skapats och ett välkomstmail har skickats');
+        this.closeCreateModal();
+
+        // Uppdatera användarlistan
+        await this.refreshUserList();
+      } catch (error) {
+        this.createModalError = `Kunde inte skapa användaren: ${error.message}`;
+        console.error('Create user error:', error);
+      } finally {
+        this.saving = false;
+      }
     }
   }
 };
 </script>
 
 <style scoped>
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
 .organization-selector {
     margin-bottom: 1.5rem;
 }
@@ -737,5 +932,28 @@ export default {
 
 .notice-error {
   border-left-color: #dc3232;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #2271b1;
+  box-shadow: 0 0 0 1px #2271b1;
 }
 </style>

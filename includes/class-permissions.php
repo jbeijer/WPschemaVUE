@@ -9,9 +9,11 @@ require_once __DIR__ . '/class-user-organization.php';
  */
 
 // Säkerhetskontroll - förhindra direkt åtkomst
-if (!defined('ABSPATH')) {
-    exit;
-}
+defined( 'ABSPATH' ) || exit;
+
+// Inkludera WordPress core-funktioner
+require_once(ABSPATH . 'wp-includes/pluggable.php');
+require_once(ABSPATH . 'wp-includes/user.php');
 
 // Dummy stubs for WordPress functions to satisfy intelephense
 if (!function_exists('plugin_dir_path')) {
@@ -46,7 +48,6 @@ if (!class_exists('WP_Error')) {
 
 // Ladda WordPress core-filer först
 require_once ABSPATH . 'wp-includes/plugin.php';
-require_once ABSPATH . 'wp-includes/pluggable.php';
 
 // Ladda våra egna klasser
 require_once plugin_dir_path(__FILE__) . 'class-organization.php';
@@ -91,33 +92,19 @@ class WPschemaVUE_Permissions {
             'read' => true,
             'edit_posts' => false,
             'delete_posts' => false,
-            'manage_shifts' => true, // Ability to manage shifts
-            'assign_shifts' => true, // Ability to assign shifts to others
-        ),
-        'wpschema_anvandare' => array(
-            'read' => true,
-            'edit_posts' => false,
-            'delete_posts' => false,
-            'view_organizations' => true, // Ability to view organizations
+            'manage_shifts' => true,
+            'assign_shifts' => true,
         ),
         'schemaanmain' => array(
             'read' => true,
             'edit_posts' => true,
             'delete_posts' => true,
-            'manage_resources' => true, // Ability to manage resources
-            'manage_users' => true, // Ability to manage users
-            'manage_organizations' => true, // Ability to manage organizations
-            'lock_shifts' => true, // Ability to lock shifts
-            'force_delete_shifts' => true, // Ability to force delete shifts
-        ),
-        'admin' => array(
-            'read' => true,
-            'edit_posts' => true,
-            'delete_posts' => true,
-            'manage_resources' => true, // Ability to manage resources
-            'lock_shifts' => true, // Ability to lock shifts
-            'force_delete_shifts' => true, // Ability to force delete shifts
-        ),
+            'manage_resources' => true,
+            'manage_users' => true,
+            'manage_organizations' => true,
+            'lock_shifts' => true,
+            'force_delete_shifts' => true,
+        )
     );
     
     /**
@@ -133,11 +120,76 @@ class WPschemaVUE_Permissions {
     }
     
     /**
-     * Registrerar roller och behörigheter.
+     * Registrera WordPress-roller
      */
     public function register_roles() {
-        foreach ($this->roles as $role => $capabilities) {
-            add_role($role, ucfirst(str_replace('_', ' ', $role)), $capabilities);
+        add_role(
+            'schema_user',
+            'Schema Användare',
+            array(
+                'read' => true,
+                'edit_posts' => false,
+                'delete_posts' => false,
+                'schema_access' => true
+            )
+        );
+    }
+
+    /**
+     * Hämta alla användare med deras organisationsdata
+     */
+    public static function get_all_users() {
+        global $wpdb;
+        
+        // Hämta alla WordPress-användare
+        $users = get_users(array(
+            'role__in' => array('administrator', 'schema_user', 'editor'),
+            'orderby' => 'display_name',
+            'order' => 'ASC'
+        ));
+
+        // Hämta organisationsdata för varje användare
+        $user_org = new WPschemaVUE_User_Organization();
+        
+        $processed_users = array();
+        foreach ($users as $user) {
+            $user_data = array(
+                'user_id' => $user->ID,
+                'user_data' => array(
+                    'ID' => $user->ID,
+                    'display_name' => $user->display_name,
+                    'user_email' => $user->user_email,
+                    'roles' => $user->roles
+                ),
+                'organizations' => array(),
+                'organization_roles' => array()
+            );
+
+            // Hämta användarens organisationer och roller
+            $org_data = $user_org->get_user_organizations($user->ID);
+            if (!empty($org_data)) {
+                foreach ($org_data as $org) {
+                    $user_data['organizations'][] = $org->organization_id;
+                    $user_data['organization_roles'][$org->organization_id] = $org->role;
+                    
+                    // Sätt primär organisation om den inte är satt
+                    if (!isset($user_data['organization_id'])) {
+                        $user_data['organization_id'] = $org->organization_id;
+                        $user_data['role'] = $org->role;
+                    }
+                }
+            }
+
+            $processed_users[] = $user_data;
         }
+
+        return $processed_users;
+    }
+
+    /**
+     * Kontrollera om användaren har en specifik behörighet
+     */
+    public static function current_user_can($capability) {
+        return current_user_can($capability);
     }
 }

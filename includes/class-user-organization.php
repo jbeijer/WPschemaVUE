@@ -84,7 +84,7 @@ class WPschemaVUE_User_Organization {
             $role = strtolower($role);
             
             // Kontrollera att rollen är ett giltigt enum-värde
-            $valid_roles = array('base', 'scheduler', 'admin', 'wpschema_anvandare', 'schemaanmain');
+            $valid_roles = array('base', 'schemalaggare', 'schemaanmain');
             if (!in_array($role, $valid_roles)) {
                 error_log("Ogiltig roll: '$role'. Giltiga roller är: " . implode(', ', $valid_roles) . ". Använder 'base' som standard.");
                 $role = 'base'; // Använd standardrollen om ett ogiltigt värde anges
@@ -345,8 +345,8 @@ class WPschemaVUE_User_Organization {
         // Definiera rollhierarkin
         $role_hierarchy = array(
             'base' => 1,
-            'scheduler' => 2,
-            'admin' => 3
+            'schemalaggare' => 2,
+            'schemaanmain' => 3
         );
         
         // Kontrollera om användarens roll är minst lika hög som den efterfrågade
@@ -397,15 +397,94 @@ class WPschemaVUE_User_Organization {
         error_log("Användarorganisation borttagen: user_id=$user_id, organization_id=$organization_id");
         return true;
     }
-}
     
-// Registrera REST-endpointen för att uppdatera användarens roll och organisation
-add_action( 'rest_api_init', function(){
-    register_rest_route( 'schedule/v1', '/organizations/(?P<orgId>\d+)/users/(?P<userId>\d+)', array(
-        'methods'  => 'PUT',
-        'callback' => array( 'WPschemaVUE_User_Organization', 'update_user_organization_role' ),
-        'permission_callback' => function() {
-            return current_user_can( 'manage_options' );
-        },
-    ));
-});
+    /**
+     * Kontrollera om en användare har behörighet att utföra en specifik åtgärd i en organisation
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @param string $action Åtgärd att kontrollera (manage_users, manage_resources, etc.)
+     * @return bool True om användaren har behörighet, false annars
+     */
+    public static function user_can($user_id, $organization_id, $action) {
+        $user_role = self::get_user_role($user_id, $organization_id);
+        
+        if (!$user_role) {
+            return false;
+        }
+        
+        // Definiera behörigheter för varje roll
+        $role_permissions = array(
+            'base' => array(
+                'view_schedule' => true,
+                'view_resources' => true
+            ),
+            'schemalaggare' => array(
+                'view_schedule' => true,
+                'view_resources' => true,
+                'manage_schedule' => true,
+                'assign_shifts' => true
+            ),
+            'schemaanmain' => array(
+                'view_schedule' => true,
+                'view_resources' => true,
+                'manage_schedule' => true,
+                'assign_shifts' => true,
+                'manage_users' => true,
+                'manage_resources' => true,
+                'manage_organizations' => true,
+                'lock_shifts' => true,
+                'force_delete_shifts' => true
+            )
+        );
+        
+        // Kontrollera om rollen har behörigheten
+        if (isset($role_permissions[$user_role]) && isset($role_permissions[$user_role][$action])) {
+            return $role_permissions[$user_role][$action];
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Hämta alla behörigheter för en användare i en organisation
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @return array Lista med behörigheter
+     */
+    public static function get_user_permissions($user_id, $organization_id) {
+        $user_role = self::get_user_role($user_id, $organization_id);
+        
+        if (!$user_role) {
+            return array();
+        }
+        
+        // Definiera behörigheter för varje roll
+        $role_permissions = array(
+            'base' => array(
+                'view_schedule' => true,
+                'view_resources' => true
+            ),
+            'schemalaggare' => array(
+                'view_schedule' => true,
+                'view_resources' => true,
+                'manage_schedule' => true,
+                'assign_shifts' => true
+            ),
+            'schemaanmain' => array(
+                'view_schedule' => true,
+                'view_resources' => true,
+                'manage_schedule' => true,
+                'assign_shifts' => true,
+                'manage_users' => true,
+                'manage_resources' => true,
+                'manage_organizations' => true,
+                'lock_shifts' => true,
+                'force_delete_shifts' => true
+            )
+        );
+        
+        return isset($role_permissions[$user_role]) ? $role_permissions[$user_role] : array();
+    }
+}

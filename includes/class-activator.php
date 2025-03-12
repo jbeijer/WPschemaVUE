@@ -87,12 +87,12 @@ class WPschemaVUE_Activator {
 		$table_exists = $wpdb->get_var("SHOW TABLES LIKE '$user_organizations_table'") === $user_organizations_table;
 		
 		if ($table_exists) {
-			// Kontrollera om 'schemaanmain' redan finns i enum-listan
+			// Kontrollera om 'wpschema_anvandare' redan finns i enum-listan
 			$column_info = $wpdb->get_row("SHOW COLUMNS FROM $user_organizations_table LIKE 'role'");
 			
-			if ($column_info && strpos($column_info->Type, 'schemaanmain') === false) {
-				// Lägg till 'schemaanmain' i enum-listan
-				$wpdb->query("ALTER TABLE $user_organizations_table MODIFY COLUMN role ENUM('base','scheduler','admin','wpschema_anvandare','schemaanmain') NOT NULL DEFAULT 'base'");
+			if ($column_info) {
+				// Uppdatera till att endast innehålla de tre rollerna
+				$wpdb->query("ALTER TABLE $user_organizations_table MODIFY COLUMN role ENUM('base','schemalaggare','schemaanmain') NOT NULL DEFAULT 'base'");
 			}
 		}
 		
@@ -160,7 +160,7 @@ class WPschemaVUE_Activator {
 
 		$organizations_sql = "CREATE TABLE $organizations_table (\n            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n            name varchar(255) NOT NULL,\n            parent_id bigint(20) unsigned DEFAULT NULL,\n            path varchar(255) DEFAULT NULL,\n            created_at datetime DEFAULT CURRENT_TIMESTAMP,\n            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n            PRIMARY KEY  (id),\n            KEY parent_id (parent_id),\n            KEY path (path)\n        ) $charset_collate;";
 
-		$user_organizations_sql = "CREATE TABLE $user_organizations_table (\n            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n            user_id bigint(20) unsigned NOT NULL,\n            organization_id bigint(20) unsigned NOT NULL,\n            role enum('base','scheduler','admin','wpschema_anvandare','schemaanmain') NOT NULL DEFAULT 'base',\n            created_at datetime DEFAULT CURRENT_TIMESTAMP,\n            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n            PRIMARY KEY  (id),\n            UNIQUE KEY user_organization (user_id,organization_id),\n            KEY organization_id (organization_id),\n            KEY user_id (user_id)\n        ) $charset_collate;";
+		$user_organizations_sql = "CREATE TABLE $user_organizations_table (\n            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n            user_id bigint(20) unsigned NOT NULL,\n            organization_id bigint(20) unsigned NOT NULL,\n            role enum('base','schemalaggare','schemaanmain') NOT NULL DEFAULT 'base',\n            created_at datetime DEFAULT CURRENT_TIMESTAMP,\n            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n            PRIMARY KEY  (id),\n            UNIQUE KEY user_organization (user_id,organization_id),\n            KEY organization_id (organization_id),\n            KEY user_id (user_id)\n        ) $charset_collate;";
 
 		$organization_permissions_sql = "CREATE TABLE $organization_permissions_table (\n            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n            user_id bigint(20) unsigned NOT NULL,\n            organization_id bigint(20) unsigned NOT NULL,\n            can_edit boolean DEFAULT FALSE,\n            can_delete boolean DEFAULT FALSE,\n            created_at datetime DEFAULT CURRENT_TIMESTAMP,\n            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n            PRIMARY KEY  (id),\n            UNIQUE KEY user_organization (user_id,organization_id),\n            KEY organization_id (organization_id),\n            KEY user_id (user_id)\n        ) $charset_collate;";
 

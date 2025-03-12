@@ -15,6 +15,8 @@ if (!defined('ABSPATH')) {
 // Inkludera WordPress-funktioner om de inte finns
 require_once ABSPATH . 'wp-includes/rest-api.php';
 require_once ABSPATH . 'wp-includes/pluggable.php';
+require_once ABSPATH . 'wp-includes/user.php';
+require_once ABSPATH . 'wp-includes/class-wp-error.php';
 
 if (!function_exists('register_rest_route')) {
     function register_rest_route($namespace, $route, $args) {}
@@ -51,6 +53,29 @@ if (!function_exists('esc_url')) {
     function esc_url($url) { return $url; }
 }
 
+// Säkerställ att nödvändiga WordPress-funktioner finns
+if (!class_exists('WP_Error')) {
+    class WP_Error {
+        public function get_error_message() { return ''; }
+    }
+}
+
+if (!function_exists('wp_generate_password')) {
+    function wp_generate_password($length = 12, $special_chars = true, $extra_special_chars = false) {
+        return substr(md5(uniqid()), 0, $length);
+    }
+}
+
+if (!function_exists('wp_insert_user')) {
+    function wp_insert_user($userdata) {
+        return new WP_Error('not_implemented', 'Funktionen är inte implementerad');
+    }
+}
+
+if (!function_exists('wp_new_user_notification')) {
+    function wp_new_user_notification($user_id, $deprecated = null, $notify = '') {}
+}
+
 /**
  * Hanterar admin-funktionalitet för pluginet
  */
@@ -72,60 +97,8 @@ class WPschemaVUE_Admin {
         // Lägg till filter för att lägga till type="module" på script-taggen
         add_filter('script_loader_tag', array($this, 'wpschema_vue_script_module'), 10, 3);
         
-        // Registrera nytt REST API för användarhantering
-        add_action('rest_api_init', function() {
-            register_rest_route('wpsv/v1', '/users', array(
-                'methods' => 'GET',
-                'callback' => function($request) {
-                    $users = WPschemaVUE_Permissions::get_all_users();
-                    return rest_ensure_response($users);
-                },
-                'permission_callback' => function() {
-                    return WPschemaVUE_Permissions::current_user_can('manage_options');
-                }
-            ));
-
-            register_rest_route('wpsv/v1', '/users/(?P<id>\d+)', array(
-                'methods' => 'POST',
-                'callback' => function($request) {
-                    global $wpdb;
-
-                    if (!WPschemaVUE_Permissions::current_user_can('manage_options')) {
-                        return new WP_Error('forbidden', 'Otillåten åtkomst', array('status' => 403));
-                    }
-
-                    $params = $request->get_json_params();
-                    $required = ['org_id', 'new_role'];
-                    
-                    foreach ($required as $field) {
-                        if (!isset($params[$field])) {
-                            return new WP_Error('missing_field', "Saknat fält: $field", array('status' => 400));
-                        }
-                    }
-
-                    $result = $wpdb->update(
-                        "{$wpdb->prefix}wpschemavue_user_org_roles",
-                        array('role' => sanitize_text_field($params['new_role'])),
-                        array(
-                            'user_id' => (int)$request['id'],
-                            'org_id' => (int)$params['org_id']
-                        ),
-                        array('%s'),
-                        array('%d', '%d')
-                    );
-
-                    if ($result === false) {
-                        return new WP_Error('db_error', 'Databasfel', array('status' => 500));
-                    }
-
-                    return rest_ensure_response(array(
-                        'success' => true,
-                        'message' => 'Behörighet uppdaterad'
-                    ));
-                },
-                'permission_callback' => '__return_true'
-            ));
-        });
+        // Registrera REST API endpoints
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
     }
     
     /**
@@ -317,5 +290,109 @@ class WPschemaVUE_Admin {
             'email' => $current_user->user_email,
             'roles' => $current_user->roles
         );
+    }
+
+    /**
+     * Registrera REST API endpoints
+     */
+    public function register_rest_routes() {
+        error_log('Registrerar REST routes för WPschemaVUE');
+        
+        register_rest_route('schedule/v1', '/users', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'get_users'),
+            'permission_callback' => array($this, 'check_admin_permissions')
+        ));
+
+        register_rest_route('schedule/v1', '/users/create', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'create_user'),
+            'permission_callback' => array($this, 'check_admin_permissions'),
+            'args' => array(
+                'email' => array(
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_email'
+                ),
+                'first_name' => array(
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'last_name' => array(
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field'
+                )
+            )
+        ));
+        
+        error_log('REST routes registrerade');
+    }
+
+    /**
+     * Kontrollera admin-behörigheter
+     */
+    public function check_admin_permissions() {
+        return current_user_can('manage_options');
+    }
+
+    /**
+     * Hämta användare
+     */
+    public function get_users($request) {
+        if (class_exists('WPschemaVUE_Permissions')) {
+            $users = WPschemaVUE_Permissions::get_all_users();
+            return rest_ensure_response($users);
+        }
+        return rest_ensure_response(array());
+    }
+
+    /**
+     * Skapa användare
+     */
+    public function create_user($request) {
+        error_log('create_user metod anropad');
+        error_log('Request params: ' . print_r($request->get_json_params(), true));
+        
+        $params = $request->get_json_params();
+        
+        // Validera nödvändiga fält
+        if (empty($params['email']) || empty($params['first_name']) || empty($params['last_name'])) {
+            return new WP_Error(
+                'missing_fields', 
+                'Alla obligatoriska fält måste fyllas i.', 
+                array('status' => 400)
+            );
+        }
+
+        // Skapa användaren
+        $userdata = array(
+            'user_login' => $params['email'],
+            'user_email' => $params['email'],
+            'first_name' => sanitize_text_field($params['first_name']),
+            'last_name' => sanitize_text_field($params['last_name']),
+            'display_name' => sanitize_text_field($params['first_name'] . ' ' . $params['last_name']),
+            'user_pass' => wp_generate_password(),
+            'role' => 'schema_user'
+        );
+
+        $user_id = wp_insert_user($userdata);
+
+        if (is_wp_error($user_id)) {
+            return new WP_Error(
+                'user_creation_failed', 
+                $user_id->get_error_message(), 
+                array('status' => 400)
+            );
+        }
+
+        // Skicka välkomstmail med lösenord
+        wp_new_user_notification($user_id, null, 'both');
+
+        return rest_ensure_response(array(
+            'id' => $user_id,
+            'message' => 'Användaren har skapats och ett välkomstmail har skickats.'
+        ));
     }
 }
