@@ -32,29 +32,77 @@
     <table v-else-if="users.length > 0" class="wp-list-table widefat fixed striped">
       <thead>
         <tr>
+          <th style="width: 30px"></th>
           <th>Namn</th>
           <th>E-post</th>
-          <th>Roll</th>
-          <th>Organisation</th>
+          <th>Organisationer & Roller</th>
           <th>Åtgärder</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="user in users" :key="user.user_id || user.id || user.user_data?.ID">
-          <td>{{ user.user_data?.display_name }}</td>
-          <td>{{ user.user_data?.user_email }}</td>
-          <td>{{ getRoleLabel(user.role || getUserRoleInOrg(user.user_id || user.id || user.user_data?.ID)) }}</td>
-          <td>{{ getOrganizationName(user.organization_id) }}</td>
-          <td>
-            <button 
-              class="button button-primary"
-              @click="handleEditClick(user)"
-              v-if="hasPermission('manage_options')"
-            >
-              Redigera
-            </button>
-          </td>
-        </tr>
+        <template v-for="user in users" :key="user.user_id || user.id || user.user_data?.ID">
+          <tr>
+            <td>
+              <button 
+                class="expand-button" 
+                @click="toggleUserDetails(user)"
+                :class="{ 'expanded': expandedUsers.includes(user.user_id) }"
+              >
+                <span class="dashicons" :class="expandedUsers.includes(user.user_id) ? 'dashicons-arrow-down' : 'dashicons-arrow-right'"></span>
+              </button>
+            </td>
+            <td>{{ user.user_data?.display_name }}</td>
+            <td>{{ user.user_data?.user_email }}</td>
+            <td>
+              <div class="org-badges">
+                <span 
+                  v-for="orgId in user.organizations || []" 
+                  :key="orgId"
+                  class="org-badge"
+                  :class="{ 'primary-org': orgId === user.organization_id }"
+                >
+                  {{ getOrganizationName(orgId) }}
+                  <span class="role-label">{{ getRoleLabel(user.organization_roles?.[orgId]) }}</span>
+                </span>
+              </div>
+            </td>
+            <td>
+              <button 
+                class="button button-primary"
+                @click="handleEditClick(user)"
+                v-if="hasPermission('manage_options')"
+              >
+                Redigera
+              </button>
+            </td>
+          </tr>
+          <tr v-if="expandedUsers.includes(user.user_id)" class="expanded-details">
+            <td colspan="5">
+              <div class="user-details">
+                <h4>Organisationsdetaljer</h4>
+                <div class="org-details-grid">
+                  <div v-for="orgId in user.organizations || []" :key="orgId" class="org-detail-card">
+                    <div class="org-detail-header">
+                      <h5>{{ getOrganizationName(orgId) }}</h5>
+                      <span :class="['org-status', { 'primary': orgId === user.organization_id }]">
+                        {{ orgId === user.organization_id ? 'Primär' : 'Sekundär' }}
+                      </span>
+                    </div>
+                    <div class="org-detail-content">
+                      <p><strong>Roll:</strong> {{ getRoleLabel(user.organization_roles?.[orgId]) }}</p>
+                      <p><strong>Behörigheter:</strong></p>
+                      <ul class="permissions-list">
+                        <li v-for="perm in getRolePermissions(user.organization_roles?.[orgId])" :key="perm">
+                          {{ perm }}
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </template>
       </tbody>
     </table>
     
@@ -191,6 +239,7 @@ export default {
       saving: false,
       newOrgId: '',
       newOrgRole: 'base',
+      expandedUsers: [],
       roles: [
         { value: 'base', label: 'Bas (Anställd)' },
         { value: 'schemalaggare', label: 'Schemaläggare' },
@@ -227,7 +276,10 @@ export default {
       }
     },
     handleEditClick(user) {
-      this.selectedUser = { ...user };
+      this.selectedUser = JSON.parse(JSON.stringify({
+        ...user,
+        role: user.role || user.organization_roles?.[user.organization_id] || 'base'
+      }));
       this.showEditModal = true;
       this.modalError = '';
     },
@@ -284,40 +336,92 @@ export default {
       }
     },
     async saveChanges() {
-      if (!this.selectedUser.organization_id) {
-        this.modalError = 'Välj en organisation för användaren';
+      this.modalError = '';
+      
+      // Om användaren inte har någon organisation och inga ändringar gjorts
+      if (!this.selectedUser.organizations?.length) {
+        this.modalError = 'Användaren måste tillhöra minst en organisation';
         return;
+      }
+
+      // Om ingen primär organisation är vald, använd den första i listan
+      if (!this.selectedUser.organization_id && this.selectedUser.organizations?.length > 0) {
+        this.selectedUser.organization_id = this.selectedUser.organizations[0];
+        this.selectedUser.role = this.selectedUser.organization_roles?.[this.selectedUser.organizations[0]] || 'base';
       }
 
       // Validera att rollen är giltig
       const validRoles = ['base', 'schemalaggare', 'schemaanmain'];
-      if (!validRoles.includes(this.selectedUser.role)) {
-        this.modalError = 'Ogiltig roll. Vänligen välj en giltig roll.';
-        return;
+      if (!this.selectedUser.role || !validRoles.includes(this.selectedUser.role)) {
+        this.selectedUser.role = 'base'; // Sätt default roll till 'base' om ogiltig
       }
 
       this.saving = true;
-      this.modalError = '';
 
       try {
+        // Spara användarens roll för primär organisation
         await this.usersStore.updateUserRole(
           this.selectedUser.organization_id,
           this.selectedUser.user_id,
           this.selectedUser.role
         );
 
-        // Uppdatera användarlistan
+        // Spara roller för alla andra organisationer
+        const savePromises = this.selectedUser.organizations
+          .filter(orgId => orgId !== this.selectedUser.organization_id)
+          .map(orgId => {
+            const role = this.selectedUser.organization_roles?.[orgId] || 'base';
+            return this.usersStore.updateUserRole(
+              orgId,
+              this.selectedUser.user_id,
+              role
+            ).catch(error => {
+              console.warn(`Kunde inte uppdatera roll för org ${orgId}:`, error);
+              return null; // Fortsätt med andra uppdateringar även om en misslyckas
+            });
+          });
+
+        await Promise.all(savePromises);
+
+        // Visa bekräftelse och stäng modal
+        this.showSuccessMessage('Ändringarna har sparats');
+        this.closeEditModal();
+
+        // Uppdatera användarlistan i bakgrunden
+        this.refreshUserList();
+      } catch (error) {
+        this.modalError = `Kunde inte spara ändringarna: ${error.message}`;
+      } finally {
+        this.saving = false;
+      }
+    },
+    async refreshUserList() {
+      try {
         if (this.selectedOrgId) {
           await this.usersStore.fetchUsersByOrganization(this.selectedOrgId);
         } else {
           await this.usersStore.fetchAllWordPressUsers();
         }
-
-        this.closeEditModal();
       } catch (error) {
-        this.modalError = `Kunde inte spara ändringarna: ${error.message}`;
-      } finally {
-        this.saving = false;
+        console.warn('Kunde inte uppdatera användarlistan:', error);
+        // Visa inget felmeddelande till användaren eftersom ändringarna sparades
+      }
+    },
+    showSuccessMessage(message) {
+      // Skapa ett success-element
+      const successDiv = document.createElement('div');
+      successDiv.className = 'notice notice-success is-dismissible';
+      successDiv.innerHTML = `<p>${message}</p>`;
+      
+      // Lägg till elementet i WordPress admin area
+      const wpWrap = document.querySelector('.wrap');
+      if (wpWrap) {
+        wpWrap.insertBefore(successDiv, wpWrap.firstChild);
+        
+        // Ta bort meddelandet efter 3 sekunder
+        setTimeout(() => {
+          successDiv.remove();
+        }, 3000);
       }
     },
     getUserRoleInOrg(userId) {
@@ -335,6 +439,38 @@ export default {
       return String(normalizedRole).split(', ')
         .map(r => r.charAt(0).toUpperCase() + r.slice(1))
         .join(', ');
+    },
+    toggleUserDetails(user) {
+      const userId = user.user_id || user.id || user.user_data?.ID;
+      const index = this.expandedUsers.indexOf(userId);
+      if (index === -1) {
+        this.expandedUsers.push(userId);
+      } else {
+        this.expandedUsers.splice(index, 1);
+      }
+    },
+    getRolePermissions(role) {
+      const permissions = {
+        base: [
+          'Visa schema',
+          'Hantera egen tillgänglighet',
+          'Se organisationsinformation'
+        ],
+        schemalaggare: [
+          'Alla bas-behörigheter',
+          'Skapa och redigera scheman',
+          'Hantera resurser',
+          'Hantera tillgänglighet för andra'
+        ],
+        schemaanmain: [
+          'Alla schemaläggarbehörigheter',
+          'Hantera användare',
+          'Hantera organisationsinställningar',
+          'Full åtkomst till systemet'
+        ]
+      };
+      
+      return permissions[role] || ['Inga specifika behörigheter'];
     }
   }
 };
@@ -489,5 +625,117 @@ export default {
   text-decoration: underline;
   background-color: #f8d7da;
   border-radius: 4px;
+}
+
+.expand-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.org-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.org-badge {
+  display: inline-flex;
+  align-items: center;
+  background-color: #f0f0f0;
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 0.9em;
+  gap: 8px;
+}
+
+.org-badge.primary-org {
+  background-color: #e3f2fd;
+  border: 1px solid #2196f3;
+}
+
+.role-label {
+  font-weight: 500;
+  color: #666;
+}
+
+.expanded-details {
+  background-color: #f8f9fa;
+}
+
+.user-details {
+  padding: 1rem;
+}
+
+.org-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.org-detail-card {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.org-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 0.5rem;
+}
+
+.org-detail-header h5 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.org-status {
+  font-size: 0.8em;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background-color: #e9ecef;
+}
+
+.org-status.primary {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.permissions-list {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+}
+
+.permissions-list li {
+  margin-bottom: 0.25rem;
+  color: #666;
+}
+
+.notice {
+  padding: 1rem;
+  margin: 1rem 0;
+  border-left: 4px solid;
+  background: white;
+}
+
+.notice-success {
+  border-left-color: #46b450;
+}
+
+.notice-error {
+  border-left-color: #dc3232;
 }
 </style>
