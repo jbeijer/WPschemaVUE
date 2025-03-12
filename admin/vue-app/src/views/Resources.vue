@@ -287,11 +287,20 @@ export default {
         return;
       }
       
-      // Validera färgvärdet
-      if (!this.newResource.color.match(/^#[0-9A-Fa-f]{6}$/)) {
+      // Normalisera färgkoden till små bokstäver
+      this.newResource.color = this.newResource.color.toLowerCase();
+      
+      // Validera färgvärdet med samma mönster som på serversidan
+      if (!this.newResource.color.match(/^#[0-9a-f]{6}$/i)) {
         alert('Färgvärdet måste vara i formatet #RRGGBB (t.ex. #3788d8)');
         return;
       }
+      
+      console.log('Creating resource with:', {
+        organizationId: this.selectedOrganizationId,
+        resource: this.newResource,
+        wpData: window.wpScheduleData
+      });
       
       this.createLoading = true;
       
@@ -305,6 +314,11 @@ export default {
         };
       } catch (error) {
         console.error('Error creating resource:', error);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          response: error.response
+        });
         alert('Det gick inte att skapa resursen: ' + error.message);
       } finally {
         this.createLoading = false;

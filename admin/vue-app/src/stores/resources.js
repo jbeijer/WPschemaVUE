@@ -135,12 +135,16 @@ export const useResourcesStore = defineStore('resources', {
       try {
         const wpData = window.wpScheduleData || {};
         
+        // Normalisera och validera färgkoden
+        const color = resourceData.color ? resourceData.color.toLowerCase() : '#3788d8';
+        if (!color.match(/^#[0-9a-f]{6}$/i)) {
+          throw new Error('Färgvärdet måste vara i formatet #RRGGBB (t.ex. #3788d8)');
+        }
+        
         const formattedData = {
           name: resourceData.name,
           description: resourceData.description || '',
-          color: resourceData.color && /^#[0-9A-Fa-f]{6}$/.test(resourceData.color) 
-            ? resourceData.color 
-            : '#3788d8'
+          color: color
         };
         
         console.log('Creating resource with data:', {
