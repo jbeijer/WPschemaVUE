@@ -6,8 +6,8 @@
       "index.html"
     ]
   },
-  "_resources-jTW616gh.js": {
-    "file": "js/resources-jTW616gh.js",
+  "_resources-4ijTwNIr.js": {
+    "file": "js/resources-4ijTwNIr.js",
     "name": "resources",
     "imports": [
       "index.html"
@@ -60,14 +60,14 @@
     ]
   },
   "src/views/Organizations.vue": {
-    "file": "js/Organizations-9MsIvBu0.js",
+    "file": "js/Organizations-DyYDORnt.js",
     "name": "Organizations",
     "src": "src/views/Organizations.vue",
     "isDynamicEntry": true,
     "imports": [
       "_organizations-CCLGaSZM.js",
       "_users-iZYXd1Qo.js",
-      "_resources-jTW616gh.js",
+      "_resources-4ijTwNIr.js",
       "index.html"
     ],
     "css": [
@@ -75,13 +75,13 @@
     ]
   },
   "src/views/Resources.vue": {
-    "file": "js/Resources-CkeoYGIK.js",
+    "file": "js/Resources-BajISVsu.js",
     "name": "Resources",
     "src": "src/views/Resources.vue",
     "isDynamicEntry": true,
     "imports": [
       "_organizations-CCLGaSZM.js",
-      "_resources-jTW616gh.js",
+      "_resources-4ijTwNIr.js",
       "index.html"
     ],
     "css": [
@@ -89,12 +89,12 @@
     ]
   },
   "src/views/Schedules.vue": {
-    "file": "js/Schedules-DFh_dy_m.js",
+    "file": "js/Schedules-CA67XCXH.js",
     "name": "Schedules",
     "src": "src/views/Schedules.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_resources-jTW616gh.js",
+      "_resources-4ijTwNIr.js",
       "_schedules-DW6yviJo.js",
       "_users-iZYXd1Qo.js",
       "_organizations-CCLGaSZM.js",
@@ -105,7 +105,7 @@
     ]
   },
   "src/views/Settings.vue": {
-    "file": "js/Settings-ByAeKwVG.js",
+    "file": "js/Settings-DQTthO0Q.js",
     "name": "Settings",
     "src": "src/views/Settings.vue",
     "isDynamicEntry": true,
