@@ -11,10 +11,21 @@
             </option>
           </select>
         </div>
-        <button class="btn btn-primary" @click="showCreateForm = true" :disabled="!selectedOrganizationId">
-          Skapa ny resurs
+        <button 
+          v-if="selectedOrganizationId" 
+          class="header-create-btn" 
+          @click="showCreateForm = true"
+        >
+          <span class="plus-icon">+</span> Skapa ny resurs
         </button>
       </div>
+    </div>
+    
+    <!-- Add prominent create button -->
+    <div class="create-resource-button-container" v-if="selectedOrganizationId">
+      <button class="btn btn-primary create-resource-btn" @click="showCreateForm = true">
+        <span class="plus-icon">+</span> Skapa ny resurs
+      </button>
     </div>
     
     <div class="loading-indicator" v-if="loading">
@@ -32,7 +43,13 @@
       
       <div v-else-if="resources.length === 0" class="no-resources-message">
         <p>Inga resurser hittades för den valda organisationen.</p>
-        <p>Klicka på "Skapa ny resurs" för att lägga till en resurs.</p>
+        <button 
+          v-if="canManageResources" 
+          class="btn btn-primary" 
+          @click="showCreateForm = true"
+        >
+          Skapa din första resurs
+        </button>
       </div>
       
       <div v-else class="resources-grid">
@@ -55,10 +72,10 @@
             <button class="btn btn-small" @click="manageAvailability(resource)">
               Hantera tillgänglighet
             </button>
-            <button class="btn btn-small" @click="editResource(resource)">
+            <button class="btn btn-small" @click="editResource(resource)" v-if="canManageResources">
               Redigera
             </button>
-            <button class="btn btn-small btn-danger" @click="confirmDelete(resource)">
+            <button class="btn btn-small btn-danger" @click="confirmDelete(resource)" v-if="canManageResources">
               Ta bort
             </button>
           </div>
@@ -76,18 +93,36 @@
         <div class="modal-body">
           <form @submit.prevent="createResource">
             <div class="form-group">
-              <label for="name">Namn</label>
-              <input type="text" id="name" v-model="newResource.name" required>
+              <label for="create-name">Namn</label>
+              <input type="text" id="create-name" v-model="newResource.name" required>
             </div>
             <div class="form-group">
-              <label for="description">Beskrivning</label>
-              <textarea id="description" v-model="newResource.description" rows="3"></textarea>
+              <label for="create-description">Beskrivning</label>
+              <textarea id="create-description" v-model="newResource.description" rows="3"></textarea>
             </div>
             <div class="form-group">
-              <label for="color">Färg</label>
-              <div class="color-picker">
-                <input type="color" id="color" v-model="newResource.color">
-                <input type="text" v-model="newResource.color" pattern="^#[0-9A-Fa-f]{6}$" placeholder="#RRGGBB">
+              <label>Tillgänglighet</label>
+              <div class="availability-options">
+                <div class="radio-option">
+                  <input type="radio" id="available-24-7" v-model="newResource.is_24_7" :value="true">
+                  <label for="available-24-7">Tillgänglig 24/7</label>
+                </div>
+                <div class="radio-option">
+                  <input type="radio" id="available-specific" v-model="newResource.is_24_7" :value="false">
+                  <label for="available-specific">Tillgänglig under specifika tider</label>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" v-if="!newResource.is_24_7">
+              <div class="time-inputs">
+                <div class="time-input">
+                  <label for="create-start-time">Starttid</label>
+                  <input type="time" id="create-start-time" v-model="newResource.start_time" required>
+                </div>
+                <div class="time-input">
+                  <label for="create-end-time">Sluttid</label>
+                  <input type="time" id="create-end-time" v-model="newResource.end_time" required>
+                </div>
               </div>
             </div>
             <div class="form-actions">
@@ -119,13 +154,6 @@
             <div class="form-group">
               <label for="edit-description">Beskrivning</label>
               <textarea id="edit-description" v-model="editedResource.description" rows="3"></textarea>
-            </div>
-            <div class="form-group">
-              <label for="edit-color">Färg</label>
-              <div class="color-picker">
-                <input type="color" id="edit-color" v-model="editedResource.color">
-                <input type="text" v-model="editedResource.color" pattern="^#[0-9A-Fa-f]{6}$" placeholder="#RRGGBB">
-              </div>
             </div>
             <div class="form-actions">
               <button type="button" class="btn btn-secondary" @click="showEditForm = false">
@@ -185,6 +213,7 @@
 import { useOrganizationsStore } from '@/stores/organizations';
 import { useResourcesStore } from '@/stores/resources';
 import ResourceAvailability from '@/components/ResourceAvailability.vue';
+import { canManageResources } from '@/utils/permissions';
 
 export default {
   name: 'Resources',
@@ -196,17 +225,10 @@ export default {
       loading: false,
       error: null,
       selectedOrganizationId: null,
-      showCreateForm: false,
       showEditForm: false,
       showDeleteConfirmation: false,
-      createLoading: false,
       updateLoading: false,
       deleteLoading: false,
-      newResource: {
-        name: '',
-        description: '',
-        color: '#3788d8'
-      },
       editedResource: {
         id: null,
         name: '',
@@ -215,7 +237,16 @@ export default {
       },
       resourceToDelete: null,
       showAvailabilityModal: false,
-      selectedResource: null
+      selectedResource: null,
+      showCreateForm: false,
+      newResource: {
+        name: '',
+        description: '',
+        is_24_7: true,
+        start_time: '',
+        end_time: ''
+      },
+      createLoading: false
     };
   },
   computed: {
@@ -224,6 +255,9 @@ export default {
     },
     resources() {
       return this.resourcesStore.resources;
+    },
+    canManageResources() {
+      return canManageResources(this.selectedOrganizationId);
     }
   },
   created() {
@@ -281,50 +315,6 @@ export default {
       }
     },
     
-    async createResource() {
-      if (!this.selectedOrganizationId) {
-        alert('Välj en organisation först.');
-        return;
-      }
-      
-      // Normalisera färgkoden till små bokstäver
-      this.newResource.color = this.newResource.color.toLowerCase();
-      
-      // Validera färgvärdet med samma mönster som på serversidan
-      if (!this.newResource.color.match(/^#[0-9a-f]{6}$/i)) {
-        alert('Färgvärdet måste vara i formatet #RRGGBB (t.ex. #3788d8)');
-        return;
-      }
-      
-      console.log('Creating resource with:', {
-        organizationId: this.selectedOrganizationId,
-        resource: this.newResource,
-        wpData: window.wpScheduleData
-      });
-      
-      this.createLoading = true;
-      
-      try {
-        await this.resourcesStore.createResource(this.selectedOrganizationId, this.newResource);
-        this.showCreateForm = false;
-        this.newResource = {
-          name: '',
-          description: '',
-          color: '#3788d8'
-        };
-      } catch (error) {
-        console.error('Error creating resource:', error);
-        console.error('Error details:', {
-          message: error.message,
-          stack: error.stack,
-          response: error.response
-        });
-        alert('Det gick inte att skapa resursen: ' + error.message);
-      } finally {
-        this.createLoading = false;
-      }
-    },
-    
     editResource(resource) {
       this.editedResource = {
         id: resource.id,
@@ -341,11 +331,7 @@ export default {
       try {
         await this.resourcesStore.updateResource(
           this.editedResource.id,
-          {
-            name: this.editedResource.name,
-            description: this.editedResource.description,
-            color: this.editedResource.color
-          }
+          this.editedResource
         );
         this.showEditForm = false;
       } catch (error) {
@@ -391,6 +377,44 @@ export default {
     manageAvailability(resource) {
       this.selectedResource = resource;
       this.showAvailabilityModal = true;
+    },
+    
+    async createResource() {
+      this.createLoading = true;
+      
+      try {
+        // Create a copy of the resource data to avoid modifying the form directly
+        const formattedResource = { ...this.newResource };
+        
+        // Format time values to ensure they match the required pattern HH:MM
+        if (!formattedResource.is_24_7) {
+          // Make sure times are in HH:MM format
+          if (formattedResource.start_time) {
+            formattedResource.start_time = formattedResource.start_time.substring(0, 5);
+          }
+          if (formattedResource.end_time) {
+            formattedResource.end_time = formattedResource.end_time.substring(0, 5);
+          }
+        }
+        
+        await this.resourcesStore.createResource(
+          this.selectedOrganizationId,
+          formattedResource
+        );
+        this.showCreateForm = false;
+        this.newResource = {
+          name: '',
+          description: '',
+          is_24_7: true,
+          start_time: '',
+          end_time: ''
+        };
+      } catch (error) {
+        console.error('Error creating resource:', error);
+        alert('Det gick inte att skapa resursen: ' + error.message);
+      } finally {
+        this.createLoading = false;
+      }
     }
   },
   watch: {
@@ -407,7 +431,7 @@ export default {
 
 <style scoped>
 .resources {
-  padding: 20px 0;
+  padding: 20px;
 }
 
 .resources-header {
@@ -415,6 +439,8 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 15px;
 }
 
 .header-actions {
@@ -426,18 +452,36 @@ export default {
 .organization-selector {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.organization-selector label {
-  font-weight: bold;
+  gap: 10px;
 }
 
 .organization-selector select {
-  padding: 6px 10px;
-  border: 1px solid #ccc;
+  padding: 8px;
   border-radius: 4px;
+  border: 1px solid #ddd;
   min-width: 200px;
+}
+
+.header-create-btn {
+  padding: 8px 16px;
+  font-size: 1em;
+  background-color: #2271b1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+}
+
+.header-create-btn:hover {
+  background-color: #135e96;
+}
+
+.header-create-btn .plus-icon {
+  font-size: 1.2em;
+  margin-right: 5px;
 }
 
 .select-organization-message,
@@ -657,5 +701,52 @@ export default {
 .modal-large {
   max-width: 800px;
   width: 90%;
+}
+
+.availability-options {
+  display: flex;
+  gap: 10px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.time-inputs {
+  display: flex;
+  gap: 10px;
+}
+
+.time-input {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.create-resource-button-container {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.create-resource-button-container .btn {
+  padding: 12px 20px;
+  font-size: 1.1em;
+}
+
+.create-resource-button-container .plus-icon {
+  font-size: 1.5em;
+  margin-right: 5px;
+}
+
+.header-create-btn {
+  padding: 8px 12px;
+  font-size: 1em;
+}
+
+.header-create-btn .plus-icon {
+  font-size: 1.2em;
+  margin-right: 5px;
 }
 </style>

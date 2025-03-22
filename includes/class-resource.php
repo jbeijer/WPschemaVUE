@@ -12,6 +12,29 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Dummy stubs for WordPress functions to satisfy intelephense
+if (!function_exists('wp_parse_args')) {
+    function wp_parse_args($args, $defaults = array()) {
+        return array_merge($defaults, $args);
+    }
+}
+
+if (!function_exists('current_time')) {
+    function current_time($type, $gmt = 0) {
+        return date('Y-m-d H:i:s');
+    }
+}
+
+if (!function_exists('sanitize_textarea_field')) {
+    function sanitize_textarea_field($str) {
+        return sanitize_text_field($str);
+    }
+}
+
+if (!defined('ARRAY_A')) {
+    define('ARRAY_A', 'ARRAY_A');
+}
+
 /**
  * Resource-klass
  */
@@ -28,6 +51,52 @@ class WPschemaVUE_Resource {
     public function __construct() {
         global $wpdb;
         $this->table = $wpdb->prefix . 'schedule_resources';
+        $this->create_table();
+        
+        // Kontrollera och uppdatera tabellstrukturen om det behövs
+        $this->maybe_update_table_structure();
+    }
+    
+    /**
+     * Kontrollerar och uppdaterar tabellstrukturen om det behövs
+     */
+    private function maybe_update_table_structure() {
+        global $wpdb;
+        
+        // Kontrollera om kolumnen is_24_7 finns
+        $column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$this->table} LIKE 'is_24_7'");
+        
+        // Om kolumnen inte finns, lägg till den
+        if (empty($column_exists)) {
+            error_log("Kolumnen is_24_7 saknas i tabellen {$this->table}, lägger till den");
+            $wpdb->query("ALTER TABLE {$this->table} 
+                ADD COLUMN is_24_7 tinyint(1) DEFAULT 1 AFTER color,
+                ADD COLUMN start_time time DEFAULT NULL AFTER is_24_7,
+                ADD COLUMN end_time time DEFAULT NULL AFTER start_time");
+        }
+    }
+    
+    private function create_table() {
+        global $wpdb;
+        $charset_collate = $wpdb->get_charset_collate();
+
+        $sql = "CREATE TABLE IF NOT EXISTS {$this->table} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            name varchar(255) NOT NULL,
+            description text,
+            organization_id bigint(20) unsigned NOT NULL,
+            color varchar(7) DEFAULT '#3788d8',
+            is_24_7 tinyint(1) DEFAULT 1,
+            start_time time DEFAULT NULL,
+            end_time time DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY organization_id (organization_id)
+        ) $charset_collate;";
+
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
     }
     
     /**
@@ -73,18 +142,15 @@ class WPschemaVUE_Resource {
      * Hämta en resurs
      *
      * @param int $id Resurs-ID
-     * @return array|null Resursen eller null om den inte finns
+     * @return object|null Resursdata som objekt, eller null om resursen inte finns
      */
     public function get_resource($id) {
         global $wpdb;
         
-        // Hämta resursen
-        $resource = $wpdb->get_row(
-            $wpdb->prepare("SELECT * FROM {$this->table} WHERE id = %d", $id),
-            ARRAY_A
-        );
+        $sql = $wpdb->prepare("SELECT * FROM {$this->table} WHERE id = %d", $id);
+        $resource = $wpdb->get_row($sql);
         
-        return $resource ?: null;
+        return $resource;
     }
     
     /**
@@ -102,6 +168,7 @@ class WPschemaVUE_Resource {
         }
         
         // Kontrollera att organisationen finns
+        require_once 'class-organization.php';
         $organization = new WPschemaVUE_Organization();
         $org_data = $organization->get_organization($data['organization_id']);
         if (!$org_data) {
@@ -121,17 +188,37 @@ class WPschemaVUE_Resource {
             $insert_data['description'] = sanitize_textarea_field($data['description']);
         }
         
-        // Lägg till färg om den finns
-        if (!empty($data['color'])) {
-            // Validera färg
-            if (!preg_match('/^#[0-9a-f]{6}$/i', $data['color'])) {
+        // Hantera tidsinställningar
+        if (isset($data['is_24_7']) && $data['is_24_7']) {
+            // Om resursen är tillgänglig 24/7
+            $insert_data['is_24_7'] = 1;
+            $insert_data['start_time'] = null;
+            $insert_data['end_time'] = null;
+        } else {
+            // Om resursen har specifika tider
+            $insert_data['is_24_7'] = 0;
+            
+            // Kontrollera att start_time och end_time finns
+            if (empty($data['start_time']) || empty($data['end_time'])) {
                 return new WP_Error(
-                    'invalid_color',
-                    __('Färgvärdet måste vara en giltig hex-färg (t.ex. #FF0000).', 'wpschema-vue'),
+                    'missing_time',
+                    __('Start- och sluttid måste anges om resursen inte är tillgänglig 24/7.', 'wpschema-vue'),
                     array('status' => 400)
                 );
             }
-            $insert_data['color'] = $data['color'];
+            
+            // Validera tidsformat
+            if (!preg_match('/^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/', $data['start_time']) ||
+                !preg_match('/^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/', $data['end_time'])) {
+                return new WP_Error(
+                    'invalid_time_format',
+                    __('Tiderna måste anges i formatet HH:MM eller HH:MM:SS.', 'wpschema-vue'),
+                    array('status' => 400)
+                );
+            }
+            
+            $insert_data['start_time'] = $data['start_time'];
+            $insert_data['end_time'] = $data['end_time'];
         }
         
         // Sätt in i databasen
@@ -149,53 +236,118 @@ class WPschemaVUE_Resource {
      *
      * @param int $id Resurs-ID
      * @param array $data Resursdata
-     * @return bool True vid framgång, false vid fel
+     * @return bool|WP_Error True vid framgång, WP_Error vid fel
      */
     public function update_resource($id, $data) {
         global $wpdb;
         
-        // Hämta befintlig resurs
+        // Kontrollera att resursen finns
         $resource = $this->get_resource($id);
         if (!$resource) {
-            return false;
+            return new WP_Error(
+                'resource_not_found',
+                __('Resursen hittades inte.', 'wpschema-vue')
+            );
         }
         
-        // Förbered data för uppdatering
-        $update_data = array(
-            'updated_at' => current_time('mysql'),
-        );
+        // Förbered uppdateringsdata
+        $update_data = array();
         
-        // Uppdatera namn om det finns
-        if (!empty($data['name'])) {
+        // Namn
+        if (isset($data['name'])) {
             $update_data['name'] = sanitize_text_field($data['name']);
         }
         
-        // Uppdatera beskrivning om den finns
+        // Beskrivning
         if (isset($data['description'])) {
             $update_data['description'] = sanitize_textarea_field($data['description']);
         }
         
-        // Uppdatera färg om den finns
-        if (!empty($data['color'])) {
-            // Validera färg
-            if (!preg_match('/^#[0-9a-f]{6}$/i', $data['color'])) {
-                return new WP_Error(
-                    'invalid_color',
-                    __('Färgvärdet måste vara en giltig hex-färg (t.ex. #FF0000).', 'wpschema-vue'),
-                    array('status' => 400)
-                );
-            }
-            $update_data['color'] = $data['color'];
+        // Färg
+        if (isset($data['color'])) {
+            $update_data['color'] = sanitize_text_field($data['color']);
         }
         
-        // Uppdatera i databasen
+        // 24/7-tillgänglighet
+        if (isset($data['is_24_7'])) {
+            if ($data['is_24_7']) {
+                $update_data['is_24_7'] = 1;
+                $update_data['start_time'] = null;
+                $update_data['end_time'] = null;
+            } else {
+                $update_data['is_24_7'] = 0;
+                
+                // Om is_24_7 är false måste start_time och end_time anges
+                if (isset($data['start_time'])) {
+                    // Validera tidsformatet (HH:MM eller HH:MM:SS)
+                    if (!preg_match('/^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/', $data['start_time'])) {
+                        return new WP_Error(
+                            'invalid_start_time',
+                            __('Starttiden måste anges i formatet HH:MM eller HH:MM:SS.', 'wpschema-vue')
+                        );
+                    }
+                    $update_data['start_time'] = $data['start_time'];
+                }
+                
+                if (isset($data['end_time'])) {
+                    // Validera tidsformatet (HH:MM eller HH:MM:SS)
+                    if (!preg_match('/^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/', $data['end_time'])) {
+                        return new WP_Error(
+                            'invalid_end_time',
+                            __('Sluttiden måste anges i formatet HH:MM eller HH:MM:SS.', 'wpschema-vue')
+                        );
+                    }
+                    $update_data['end_time'] = $data['end_time'];
+                }
+            }
+        } else {
+            // Om is_24_7 inte anges men start_time eller end_time anges
+            if (isset($data['start_time']) || isset($data['end_time'])) {
+                $update_data['is_24_7'] = 0;
+                
+                if (isset($data['start_time'])) {
+                    // Validera tidsformatet (HH:MM eller HH:MM:SS)
+                    if (!preg_match('/^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/', $data['start_time'])) {
+                        return new WP_Error(
+                            'invalid_start_time',
+                            __('Starttiden måste anges i formatet HH:MM eller HH:MM:SS.', 'wpschema-vue')
+                        );
+                    }
+                    $update_data['start_time'] = $data['start_time'];
+                }
+                
+                if (isset($data['end_time'])) {
+                    // Validera tidsformatet (HH:MM eller HH:MM:SS)
+                    if (!preg_match('/^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/', $data['end_time'])) {
+                        return new WP_Error(
+                            'invalid_end_time',
+                            __('Sluttiden måste anges i formatet HH:MM eller HH:MM:SS.', 'wpschema-vue')
+                        );
+                    }
+                    $update_data['end_time'] = $data['end_time'];
+                }
+            }
+        }
+        
+        // Uppdatera modified_at
+        $update_data['updated_at'] = current_time('mysql');
+        
+        // Uppdatera resursen
         $result = $wpdb->update(
             $this->table,
             $update_data,
             array('id' => $id)
         );
         
-        return $result !== false;
+        // Returnera resultatet
+        if ($result === false) {
+            return new WP_Error(
+                'update_failed',
+                __('Kunde inte uppdatera resursen.', 'wpschema-vue')
+            );
+        }
+        
+        return true;
     }
     
     /**
@@ -207,22 +359,17 @@ class WPschemaVUE_Resource {
     public function delete_resource($id) {
         global $wpdb;
         
-        // Hämta befintlig resurs
+        // Kontrollera att resursen finns
         $resource = $this->get_resource($id);
         if (!$resource) {
             return false;
         }
         
-        // Kontrollera om resursen har scheman
-        $schedule_count = $this->get_schedule_count($id);
-        if ($schedule_count > 0) {
-            return false; // Kan inte ta bort en resurs med scheman
-        }
-        
-        // Ta bort från databasen
+        // Ta bort resursen
         $result = $wpdb->delete(
             $this->table,
-            array('id' => $id)
+            array('id' => $id),
+            array('%d')
         );
         
         return $result !== false;

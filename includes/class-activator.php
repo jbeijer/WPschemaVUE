@@ -96,6 +96,41 @@ class WPschemaVUE_Activator {
 			}
 		}
 		
+		// Uppdatera resources_table för att lägga till nya fält för tidsinställningar
+		$resources_table = $wpdb->prefix . 'schedule_resources';
+		
+		// Kontrollera om tabellen finns
+		$resources_table_exists = $wpdb->get_var("SHOW TABLES LIKE '$resources_table'") === $resources_table;
+		
+		if ($resources_table_exists) {
+			// Kontrollera om is_24_7 kolumnen redan finns
+			$is_24_7_exists = $wpdb->get_var("SHOW COLUMNS FROM $resources_table LIKE 'is_24_7'");
+			
+			if (!$is_24_7_exists) {
+				// Lägg till is_24_7 kolumn
+				$wpdb->query("ALTER TABLE $resources_table ADD COLUMN is_24_7 TINYINT(1) DEFAULT 0 AFTER color");
+			}
+			
+			// Kontrollera om start_time kolumnen redan finns
+			$start_time_exists = $wpdb->get_var("SHOW COLUMNS FROM $resources_table LIKE 'start_time'");
+			
+			if (!$start_time_exists) {
+				// Lägg till start_time kolumn
+				$wpdb->query("ALTER TABLE $resources_table ADD COLUMN start_time TIME DEFAULT NULL AFTER is_24_7");
+			}
+			
+			// Kontrollera om end_time kolumnen redan finns
+			$end_time_exists = $wpdb->get_var("SHOW COLUMNS FROM $resources_table LIKE 'end_time'");
+			
+			if (!$end_time_exists) {
+				// Lägg till end_time kolumn
+				$wpdb->query("ALTER TABLE $resources_table ADD COLUMN end_time TIME DEFAULT NULL AFTER start_time");
+			}
+			
+			// Uppdatera befintliga resurser till att vara tillgängliga 24/7 som standard
+			$wpdb->query("UPDATE $resources_table SET is_24_7 = 1 WHERE start_time IS NULL AND end_time IS NULL");
+		}
+		
 		// Uppdatera versionen med en säker metod som undviker lint-fel
 		self::safe_update_option('wpschema_vue_db_version', WPSCHEMA_VUE_VERSION);
 	}

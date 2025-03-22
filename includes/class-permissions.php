@@ -40,6 +40,12 @@ if (!function_exists('user_can')) {
     }
 }
 
+if (!function_exists('get_users')) {
+    function get_users($args = array()) {
+        return array();
+    }
+}
+
 if (!class_exists('WP_Error')) {
     class WP_Error {
         public function __construct($code, $message, $data = array()) {}
@@ -191,5 +197,118 @@ class WPschemaVUE_Permissions {
      */
     public static function current_user_can($capability) {
         return current_user_can($capability);
+    }
+
+    /**
+     * Kontrollera om användaren tillhör en organisation
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @return bool True om användaren tillhör organisationen, annars false
+     */
+    public function user_belongs_to_organization($user_id, $organization_id) {
+        // Kontrollera om vi har cachat resultatet
+        $cache_key = "user_{$user_id}_org_{$organization_id}_belongs";
+        if (isset($this->permission_cache[$cache_key])) {
+            return $this->permission_cache[$cache_key];
+        }
+        
+        // Hämta användarens organisationer
+        $user_orgs = $this->user_organization->get_user_organizations($user_id);
+        
+        // Kontrollera om användaren tillhör organisationen
+        $belongs = false;
+        if (!empty($user_orgs)) {
+            foreach ($user_orgs as $org) {
+                if ($org->organization_id == $organization_id) {
+                    $belongs = true;
+                    break;
+                }
+            }
+        }
+        
+        // Cacha resultatet
+        $this->permission_cache[$cache_key] = $belongs;
+        
+        return $belongs;
+    }
+    
+    /**
+     * Kontrollera om användaren har en specifik roll i en organisation
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @param string $role Roll att kontrollera (bas, schemalaggare, schemaanmain)
+     * @return bool True om användaren har rollen, annars false
+     */
+    public function user_has_role_in_organization($user_id, $organization_id, $role) {
+        // Kontrollera om vi har cachat resultatet
+        $cache_key = "user_{$user_id}_org_{$organization_id}_role_{$role}";
+        if (isset($this->permission_cache[$cache_key])) {
+            return $this->permission_cache[$cache_key];
+        }
+        
+        // Hämta användarens organisationer och roller
+        $user_orgs = $this->user_organization->get_user_organizations($user_id);
+        
+        // Kontrollera om användaren har rollen i organisationen
+        $has_role = false;
+        if (!empty($user_orgs)) {
+            foreach ($user_orgs as $org) {
+                if ($org->organization_id == $organization_id) {
+                    // Om vi söker efter en specifik roll
+                    if ($role) {
+                        if ($org->role == $role) {
+                            $has_role = true;
+                            break;
+                        }
+                        
+                        // Schemaanmain har alla rättigheter som schemalaggare har
+                        if ($role == 'schemalaggare' && $org->role == 'schemaanmain') {
+                            $has_role = true;
+                            break;
+                        }
+                        
+                        // Schemalaggare och schemaanmain har alla rättigheter som bas har
+                        if ($role == 'bas' && ($org->role == 'schemalaggare' || $org->role == 'schemaanmain')) {
+                            $has_role = true;
+                            break;
+                        }
+                    } else {
+                        // Om ingen specifik roll angavs, räcker det att användaren tillhör organisationen
+                        $has_role = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Cacha resultatet
+        $this->permission_cache[$cache_key] = $has_role;
+        
+        return $has_role;
+    }
+    
+    /**
+     * Kontrollera om användaren har behörighet att hantera resurser
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @return bool True om användaren har behörighet, annars false
+     */
+    public function user_can_manage_resources($user_id, $organization_id) {
+        return $this->user_has_role_in_organization($user_id, $organization_id, 'schemaanmain');
+    }
+    
+    /**
+     * Kontrollera om användaren har behörighet att hantera scheman
+     *
+     * @param int $user_id Användar-ID
+     * @param int $organization_id Organisations-ID
+     * @return bool True om användaren har behörighet, annars false
+     */
+    public function user_can_manage_schedules($user_id, $organization_id) {
+        return $this->user_has_role_in_organization($user_id, $organization_id, 'schemalaggare') || 
+               $this->user_has_role_in_organization($user_id, $organization_id, 'schemaanmain');
     }
 }

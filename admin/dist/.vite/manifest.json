@@ -1,27 +1,27 @@
 {
-  "_organizations-DDl1q7Xk.js": {
-    "file": "js/organizations-DDl1q7Xk.js",
+  "_organizations-CCLGaSZM.js": {
+    "file": "js/organizations-CCLGaSZM.js",
     "name": "organizations",
     "imports": [
       "index.html"
     ]
   },
-  "_resources-DZMGk_68.js": {
-    "file": "js/resources-DZMGk_68.js",
+  "_resources-jTW616gh.js": {
+    "file": "js/resources-jTW616gh.js",
     "name": "resources",
     "imports": [
       "index.html"
     ]
   },
-  "_schedules-BxqpP_Oj.js": {
-    "file": "js/schedules-BxqpP_Oj.js",
+  "_schedules-DW6yviJo.js": {
+    "file": "js/schedules-DW6yviJo.js",
     "name": "schedules",
     "imports": [
       "index.html"
     ]
   },
-  "_users-g_BMw27O.js": {
-    "file": "js/users-g_BMw27O.js",
+  "_users-iZYXd1Qo.js": {
+    "file": "js/users-iZYXd1Qo.js",
     "name": "users",
     "imports": [
       "index.html"
@@ -45,14 +45,14 @@
     ]
   },
   "src/views/Dashboard.vue": {
-    "file": "js/Dashboard-f02d91BR.js",
+    "file": "js/Dashboard-CgIdRoeu.js",
     "name": "Dashboard",
     "src": "src/views/Dashboard.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_users-g_BMw27O.js",
-      "_organizations-DDl1q7Xk.js",
-      "_schedules-BxqpP_Oj.js",
+      "_users-iZYXd1Qo.js",
+      "_organizations-CCLGaSZM.js",
+      "_schedules-DW6yviJo.js",
       "index.html"
     ],
     "css": [
@@ -60,14 +60,14 @@
     ]
   },
   "src/views/Organizations.vue": {
-    "file": "js/Organizations-HwO19h5j.js",
+    "file": "js/Organizations-9MsIvBu0.js",
     "name": "Organizations",
     "src": "src/views/Organizations.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_organizations-DDl1q7Xk.js",
-      "_users-g_BMw27O.js",
-      "_resources-DZMGk_68.js",
+      "_organizations-CCLGaSZM.js",
+      "_users-iZYXd1Qo.js",
+      "_resources-jTW616gh.js",
       "index.html"
     ],
     "css": [
@@ -75,13 +75,13 @@
     ]
   },
   "src/views/Resources.vue": {
-    "file": "js/Resources-BQ-VF1qC.js",
+    "file": "js/Resources-CkeoYGIK.js",
     "name": "Resources",
     "src": "src/views/Resources.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_organizations-DDl1q7Xk.js",
-      "_resources-DZMGk_68.js",
+      "_organizations-CCLGaSZM.js",
+      "_resources-jTW616gh.js",
       "index.html"
     ],
     "css": [
@@ -89,15 +89,15 @@
     ]
   },
   "src/views/Schedules.vue": {
-    "file": "js/Schedules-DyzvFrhV.js",
+    "file": "js/Schedules-DFh_dy_m.js",
     "name": "Schedules",
     "src": "src/views/Schedules.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_resources-DZMGk_68.js",
-      "_schedules-BxqpP_Oj.js",
-      "_users-g_BMw27O.js",
-      "_organizations-DDl1q7Xk.js",
+      "_resources-jTW616gh.js",
+      "_schedules-DW6yviJo.js",
+      "_users-iZYXd1Qo.js",
+      "_organizations-CCLGaSZM.js",
       "index.html"
     ],
     "css": [
@@ -105,12 +105,12 @@
     ]
   },
   "src/views/Settings.vue": {
-    "file": "js/Settings-FzJ4YoVY.js",
+    "file": "js/Settings-ByAeKwVG.js",
     "name": "Settings",
     "src": "src/views/Settings.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_users-g_BMw27O.js",
+      "_users-iZYXd1Qo.js",
       "index.html"
     ],
     "css": [
@@ -118,13 +118,13 @@
     ]
   },
   "src/views/UserManagement.vue": {
-    "file": "js/UserManagement-CJUFOvoC.js",
+    "file": "js/UserManagement-BZJXnfmV.js",
     "name": "UserManagement",
     "src": "src/views/UserManagement.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_organizations-DDl1q7Xk.js",
-      "_users-g_BMw27O.js",
+      "_organizations-CCLGaSZM.js",
+      "_users-iZYXd1Qo.js",
       "index.html"
     ],
     "css": [

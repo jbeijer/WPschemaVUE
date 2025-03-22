@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia';
+// Vi behöver fortfarande färgfunktionerna för andra delar av koden
+import { normalizeColor, isValidColor } from '@/utils/colorUtils';
 
 export const useResourcesStore = defineStore('resources', {
   state: () => ({
@@ -135,17 +137,18 @@ export const useResourcesStore = defineStore('resources', {
       try {
         const wpData = window.wpScheduleData || {};
         
-        // Normalisera och validera färgkoden
-        const color = resourceData.color ? resourceData.color.toLowerCase() : '#3788d8';
-        if (!color.match(/^#[0-9a-f]{6}$/i)) {
-          throw new Error('Färgvärdet måste vara i formatet #RRGGBB (t.ex. #3788d8)');
-        }
-        
+        // Create formatted data with all necessary fields
         const formattedData = {
           name: resourceData.name,
           description: resourceData.description || '',
-          color: color
+          is_24_7: resourceData.is_24_7
         };
+        
+        // Add time constraints if not 24/7
+        if (!resourceData.is_24_7) {
+          formattedData.start_time = resourceData.start_time;
+          formattedData.end_time = resourceData.end_time;
+        }
         
         console.log('Creating resource with data:', {
           organizationId,
@@ -156,7 +159,7 @@ export const useResourcesStore = defineStore('resources', {
         const url = `${wpData.rest_url}schedule/v1/organizations/${organizationId}/resources`;
         console.log('Request URL:', url);
         
-        // Logga request body
+        // Log request body
         const requestBody = JSON.stringify(formattedData);
         console.log('Request body:', requestBody);
         
@@ -180,32 +183,25 @@ export const useResourcesStore = defineStore('resources', {
           // Hantera specifika felmeddelanden från API:et
           if (errorData?.code === 'rest_invalid_param') {
             const paramErrors = errorData.data?.params || {};
-            console.error('Parameter errors:', paramErrors);
-            const errorMessages = Object.entries(paramErrors)
-              .map(([param, details]) => `${param}: ${details}`)
-              .join(', ');
-            throw new Error(`Valideringsfel: ${errorMessages}`);
+            console.log('Parameter errors:', paramErrors);
+            
+            // Skapa ett mer specifikt felmeddelande
+            const errorMessages = Object.entries(paramErrors).map(([param, message]) => `${param}: ${message}`);
+            throw new Error(`Valideringsfel: ${errorMessages.join(', ')}`);
           }
           
           throw new Error(errorData?.message || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
-        console.log('API Response:', data);
         
         // Hantera både array-svar och success/data-svar
-        if (Array.isArray(data)) {
-          const newResource = data[0]; // Ta första resursen från arrayen
-          this.resources.push(newResource);
-          return newResource;
-        } else if (data && data.success) {
-          this.resources.push(data.data);
-          return data.data;
-        } else if (data && data.data) {
+        if (data.success) {
+          // Lägg till den nya resursen i listan
           this.resources.push(data.data);
           return data.data;
         } else {
-          throw new Error(data?.error?.message || 'Ett okänt fel uppstod vid skapande av resurs');
+          throw new Error(data.error?.message || 'Ett okänt fel uppstod vid skapande av resurs');
         }
       } catch (error) {
         console.error('Error creating resource:', error);
@@ -223,18 +219,54 @@ export const useResourcesStore = defineStore('resources', {
       
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}schedule/v1/resources/${resourceId}`, {
+        
+        // Uppdatera data utan färg
+        const formattedData = {
+          name: resourceData.name,
+          description: resourceData.description || ''
+          // Skickar inte med color, så backend använder standardfärg eller behåller befintlig
+        };
+        
+        console.log('Updating resource with data:', {
+          resourceId,
+          formattedData,
+          wpData
+        });
+        
+        const url = `${wpData.rest_url}schedule/v1/resources/${resourceId}`;
+        console.log('Request URL:', url);
+        
+        // Logga request body
+        const requestBody = JSON.stringify(formattedData);
+        console.log('Request body:', requestBody);
+        
+        const response = await fetch(url, {
           method: 'PUT',
           credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
             'X-WP-Nonce': wpData.nonce
           },
-          body: JSON.stringify(resourceData)
+          body: requestBody
         });
         
+        console.log('Response status:', response.status);
+        
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorData = await response.json().catch(() => null);
+          console.error('Error response:', errorData);
+          
+          // Hantera specifika felmeddelanden från API:et
+          if (errorData?.code === 'rest_invalid_param') {
+            const paramErrors = errorData.data?.params || {};
+            console.log('Parameter errors:', paramErrors);
+            
+            // Skapa ett mer specifikt felmeddelande
+            const errorMessages = Object.entries(paramErrors).map(([param, message]) => `${param}: ${message}`);
+            throw new Error(`Valideringsfel: ${errorMessages.join(', ')}`);
+          }
+          
+          throw new Error(errorData?.message || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();

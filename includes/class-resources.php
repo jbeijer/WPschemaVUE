@@ -53,18 +53,6 @@ class Resources {
                         }
                     )
                 )
-            ),
-            array(
-                'methods' => 'POST',
-                'callback' => array($this, 'create_resource'),
-                'permission_callback' => array($this, 'check_permission'),
-                'args' => array(
-                    'organization_id' => array(
-                        'validate_callback' => function($param) {
-                            return is_numeric($param);
-                        }
-                    )
-                )
             )
         ));
 
@@ -185,63 +173,6 @@ class Resources {
     }
 
     /**
-     * Skapar en ny resurs
-     */
-    public function create_resource($request) {
-        $organization_id = $request['organization_id'];
-        $data = $request->get_json_params();
-
-        // Validera data
-        if (!$this->validate_resource_data($data)) {
-            return array(
-                'success' => false,
-                'error' => array(
-                    'code' => 'validation_error',
-                    'message' => 'Ogiltig data',
-                    'details' => array()
-                )
-            );
-        }
-
-        // Kontrollera att resursnamnet är unikt inom organisationen
-        if ($this->resource_name_exists($data['name'], $organization_id)) {
-            return array(
-                'success' => false,
-                'error' => array(
-                    'code' => 'validation_error',
-                    'message' => 'En resurs med detta namn finns redan i organisationen',
-                    'details' => array()
-                )
-            );
-        }
-
-        $result = $this->wpdb->insert(
-            $this->table_name,
-            array(
-                'name' => $data['name'],
-                'description' => $data['description'] ?? '',
-                'organization_id' => $organization_id,
-                'color' => $data['color'] ?? '#000000'
-            ),
-            array('%s', '%s', '%d', '%s')
-        );
-
-        if ($result === false) {
-            return array(
-                'success' => false,
-                'error' => array(
-                    'code' => 'server_error',
-                    'message' => 'Ett fel uppstod vid skapande av resursen',
-                    'details' => array()
-                )
-            );
-        }
-
-        $resource_id = $this->wpdb->insert_id;
-        return $this->get_resource(array('id' => $resource_id));
-    }
-
-    /**
      * Hämtar en specifik resurs
      */
     public function get_resource($request) {
@@ -308,7 +239,7 @@ class Resources {
             array(
                 'name' => $data['name'],
                 'description' => $data['description'] ?? '',
-                'color' => $data['color'] ?? '#000000'
+                'color' => '#3788d8' // Använd alltid standardfärg
             ),
             array('id' => $resource_id),
             array('%s', '%s', '%s'),
@@ -382,10 +313,6 @@ class Resources {
      */
     private function validate_resource_data($data) {
         if (!isset($data['name']) || empty($data['name'])) {
-            return false;
-        }
-
-        if (isset($data['color']) && !preg_match('/^#[0-9A-Fa-f]{6}$/', $data['color'])) {
             return false;
         }
 
