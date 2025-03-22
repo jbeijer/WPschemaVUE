@@ -5,101 +5,131 @@
       <p>Välkommen till Schema Manager!</p>
     </div>
     
-    <div class="dashboard-content">
+    <!-- Loading and Error States -->
+    <LoadingIndicator v-if="loading" message="Laddar dashboard..." />
+    <ErrorMessage v-if="error" :message="error" />
+    
+    <div class="dashboard-content" v-if="!loading && !error">
       <div class="dashboard-stats">
-        <div class="stat-card" v-if="currentUserInfo">
-          <h3>Din information</h3>
-          <p><strong>Namn:</strong> {{ currentUserInfo.display_name }}</p>
-          <p><strong>E-post:</strong> {{ currentUserInfo.email }}</p>
-          <p><strong>Användarnamn:</strong> {{ currentUserInfo.username }}</p>
-        </div>
+        <!-- User Information Card -->
+        <InfoCard
+          v-if="currentUserInfo"
+          title="Din information"
+          icon="user"
+        >
+          <template #content>
+            <p><strong>Namn:</strong> {{ currentUserInfo.display_name }}</p>
+            <p><strong>E-post:</strong> {{ currentUserInfo.email }}</p>
+            <p><strong>Användarnamn:</strong> {{ currentUserInfo.username }}</p>
+          </template>
+        </InfoCard>
         
-        <div class="stat-card">
-          <h3>Organisationer</h3>
-          <p v-if="organizationsLoading">Laddar organisationer...</p>
-          <p v-else-if="organizations.length === 0">Inga organisationer hittades.</p>
-          <ul v-else>
-            <li v-for="org in organizations" :key="org.id">
-              {{ org.name }}
-              <span class="badge" v-if="currentUserInfo && currentUserInfo.organizations">
-                {{ getUserRoleInOrganization(org.id) }}
-              </span>
-            </li>
-          </ul>
-        </div>
+        <!-- Organizations Card -->
+        <InfoCard 
+          title="Organisationer"
+          icon="building"
+          :loading="organizationsLoading"
+        >
+          <template #content>
+            <EmptyState 
+              v-if="!organizationsLoading && organizations.length === 0"
+              message="Inga organisationer hittades."
+              icon="building"
+            />
+            
+            <ul v-else-if="!organizationsLoading" class="organization-list">
+              <li v-for="org in organizations" :key="org.id" class="organization-item">
+                <span class="organization-name">{{ org.name }}</span>
+                <RoleBadge 
+                  v-if="currentUserInfo && currentUserInfo.organizations"
+                  :role="getUserRoleInOrganization(org.id)"
+                />
+              </li>
+            </ul>
+          </template>
+        </InfoCard>
       </div>
       
       <div class="dashboard-actions">
-        <div class="action-card">
-          <h3>Snabbåtgärder</h3>
-          <div class="action-buttons">
-            <router-link :to="{ name: 'organizations' }" class="btn">
+        <!-- Quick Actions Card -->
+        <ActionCard title="Snabbåtgärder" icon="lightning">
+          <template #actions>
+            <router-link :to="{ name: 'organizations' }" class="action-button">
+              <span class="action-icon building-icon"></span>
               Hantera organisationer
             </router-link>
-            <router-link :to="{ name: 'resources' }" class="btn">
+            <router-link :to="{ name: 'resources' }" class="action-button">
+              <span class="action-icon resource-icon"></span>
               Hantera resurser
             </router-link>
-            <router-link :to="{ name: 'schedules' }" class="btn">
+            <router-link :to="{ name: 'schedules' }" class="action-button">
+              <span class="action-icon calendar-icon"></span>
               Visa scheman
             </router-link>
-          </div>
-        </div>
+          </template>
+        </ActionCard>
         
-        <div class="action-card">
-          <h3>Mitt schema</h3>
-          <p v-if="schedulesLoading">Laddar schema...</p>
-          <p v-else-if="mySchedules.length === 0">Inga schemalagda arbetspass.</p>
-          <ul v-else class="schedule-list">
-            <li v-for="schedule in mySchedules" :key="schedule.id" class="schedule-item">
-              <div class="schedule-date">
-                {{ formatDate(schedule.start_time) }}
-              </div>
-              <div class="schedule-time">
-                {{ formatTime(schedule.start_time) }} - {{ formatTime(schedule.end_time) }}
-              </div>
-              <div class="schedule-resource">
-                {{ schedule.resource_name || 'Okänd resurs' }}
-              </div>
-              <div class="schedule-status" :class="'status-' + schedule.status">
-                {{ translateStatus(schedule.status) }}
-              </div>
-            </li>
-          </ul>
-          <div class="view-all">
-            <router-link :to="{ name: 'schedules' }" class="btn btn-small">
-              Visa alla
-            </router-link>
-          </div>
-        </div>
+        <!-- My Schedule Card -->
+        <ScheduleCard
+          title="Mitt schema"
+          :schedules="mySchedules"
+          :loading="schedulesLoading"
+          @view-all="navigateToSchedules"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import { defineComponent } from 'vue';
 import { useUsersStore } from '@/stores/users';
 import { useOrganizationsStore } from '@/stores/organizations';
 import { useSchedulesStore } from '@/stores/schedules';
+import LoadingIndicator from '@/components/LoadingIndicator.vue';
+import ErrorMessage from '@/components/ErrorMessage.vue';
+import InfoCard from '@/components/dashboard/InfoCard.vue';
+import ActionCard from '@/components/dashboard/ActionCard.vue';
+import ScheduleCard from '@/components/dashboard/ScheduleCard.vue';
+import EmptyState from '@/components/EmptyState.vue';
+import RoleBadge from '@/components/RoleBadge.vue';
 
-export default {
+export default defineComponent({
   name: 'Dashboard',
+  
+  components: {
+    LoadingIndicator,
+    ErrorMessage,
+    InfoCard,
+    ActionCard,
+    ScheduleCard,
+    EmptyState,
+    RoleBadge
+  },
+  
   data() {
     return {
+      loading: true,
+      error: null,
       mySchedules: [],
       schedulesLoading: false
     };
   },
+  
   computed: {
     currentUserInfo() {
       return this.usersStore.currentUserInfo;
     },
+    
     organizations() {
       return this.organizationsStore.organizations;
     },
+    
     organizationsLoading() {
       return this.organizationsStore.loading;
     }
   },
+  
   created() {
     this.usersStore = useUsersStore();
     this.organizationsStore = useOrganizationsStore();
@@ -107,8 +137,12 @@ export default {
     
     this.loadData();
   },
+  
   methods: {
     async loadData() {
+      this.loading = true;
+      this.error = null;
+      
       try {
         // Load user info
         await this.usersStore.fetchCurrentUserInfo();
@@ -120,10 +154,15 @@ export default {
         await this.loadMySchedules();
       } catch (error) {
         console.error('Error loading dashboard data:', error);
+        this.error = 'Kunde inte ladda dashboard-data: ' + (error.message || 'Okänt fel');
+      } finally {
+        this.loading = false;
       }
     },
+    
     async loadMySchedules() {
       this.schedulesLoading = true;
+      
       try {
         // Get today's date
         const today = new Date();
@@ -143,33 +182,16 @@ export default {
         this.mySchedules = this.schedulesStore.schedules.slice(0, 5);
       } catch (error) {
         console.error('Error loading schedules:', error);
+        this.error = 'Kunde inte ladda schema: ' + (error.message || 'Okänt fel');
       } finally {
         this.schedulesLoading = false;
       }
     },
+    
     formatDateForAPI(date) {
       return date.toISOString().split('T')[0];
     },
-    formatDate(dateString) {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('sv-SE');
-    },
-    formatTime(dateString) {
-      const date = new Date(dateString);
-      return date.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
-    },
-    translateStatus(status) {
-      switch (status) {
-        case 'scheduled':
-          return 'Planerad';
-        case 'confirmed':
-          return 'Bekräftad';
-        case 'completed':
-          return 'Genomförd';
-        default:
-          return status;
-      }
-    },
+    
     getUserRoleInOrganization(orgId) {
       if (!this.currentUserInfo || !this.currentUserInfo.organizations) {
         return '';
@@ -180,137 +202,115 @@ export default {
         return '';
       }
       
-      switch (org.role) {
-        case 'admin':
-          return 'Admin';
-        case 'scheduler':
-          return 'Schemaläggare';
-        case 'base':
-          return 'Bas';
-        default:
-          return org.role;
-      }
+      return org.role;
+    },
+    
+    navigateToSchedules() {
+      this.$router.push({ name: 'schedules' });
     }
   }
-};
+});
 </script>
 
 <style scoped>
 .dashboard {
-  padding: 20px 0;
+  padding: 20px;
 }
 
 .dashboard-header {
-  margin-bottom: 30px;
+  margin-bottom: 24px;
+}
+
+.dashboard-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 1.75rem;
+  color: #23282d;
+}
+
+.dashboard-header p {
+  margin: 0;
+  color: #50575e;
 }
 
 .dashboard-content {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
 }
 
-.dashboard-stats, .dashboard-actions {
-  flex: 1;
-  min-width: 300px;
+.dashboard-stats,
+.dashboard-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
 }
 
-.stat-card, .action-card {
-  background-color: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 4px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.stat-card h3, .action-card h3 {
-  margin-top: 0;
-  border-bottom: 1px solid #e5e5e5;
-  padding-bottom: 10px;
-  margin-bottom: 15px;
-}
-
-.action-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.btn {
-  display: inline-block;
-  background-color: #0073aa;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 4px;
-  text-decoration: none;
-  text-align: center;
-  transition: background-color 0.2s;
-}
-
-.btn:hover {
-  background-color: #005177;
-}
-
-.btn-small {
-  padding: 4px 8px;
-  font-size: 0.9em;
-}
-
-.badge {
-  display: inline-block;
-  background-color: #e5e5e5;
-  color: #333;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 0.8em;
-  margin-left: 5px;
-}
-
-.schedule-list {
+.organization-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.schedule-item {
+.organization-item {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #eee;
 }
 
-.schedule-date {
-  width: 100px;
-  font-weight: bold;
+.organization-item:last-child {
+  border-bottom: none;
 }
 
-.schedule-time {
-  width: 150px;
+.organization-name {
+  font-weight: 500;
 }
 
-.schedule-resource {
-  flex: 1;
+.action-button {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  color: #495057;
+  text-decoration: none;
+  font-weight: 500;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
 }
 
-.schedule-status {
-  width: 100px;
-  text-align: right;
+.action-button:hover {
+  background-color: #e9ecef;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.status-scheduled {
-  color: #0073aa;
+.action-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  opacity: 0.7;
 }
 
-.status-confirmed {
-  color: #46b450;
+/* Responsive layout for larger screens */
+@media (min-width: 768px) {
+  .dashboard-content {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  
+  .dashboard-stats,
+  .dashboard-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
-.status-completed {
-  color: #999;
-}
-
-.view-all {
-  margin-top: 15px;
-  text-align: right;
+@media (min-width: 1200px) {
+  .dashboard-stats,
+  .dashboard-actions {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 </style>

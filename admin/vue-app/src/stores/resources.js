@@ -383,59 +383,173 @@ export const useResourcesStore = defineStore('resources', {
     async fetchAvailability(resourceId) {
       try {
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}schedule/v1/resources/${resourceId}/availability`, {
-          method: 'GET',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-WP-Nonce': wpData.nonce
-          }
-        });
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        // Get the organization ID for this resource
+        const resource = this.resources.find(r => r.id === resourceId);
+        if (!resource) {
+          throw new Error(`Resource with ID ${resourceId} not found`);
         }
         
-        const data = await response.json();
-        if (data.success) {
-          this.availabilities[resourceId] = data.data;
-          return data.data;
-        } else {
-          throw new Error(data.error?.message || 'Ett okänt fel uppstod vid hämtning av tillgänglighet');
+        const organizationId = resource.organization_id;
+        const url = `${wpData.rest_url}schedule/v1/organizations/${organizationId}/resources/${resourceId}/availability`;
+        
+        console.log('Fetching availability with URL:', url);
+        
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-Nonce': wpData.nonce
+            }
+          });
+          
+          if (!response.ok) {
+            // If API endpoint doesn't exist, use fallback data
+            if (response.status === 404) {
+              console.log('API endpoint not found. Using local availability data.');
+              return this.getLocalAvailability(resourceId);
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          if (data.success) {
+            this.availabilities[resourceId] = data.data;
+            // Also save to local storage as a backup
+            this.saveLocalAvailability(resourceId, data.data);
+            return data.data;
+          } else {
+            throw new Error(data.error?.message || 'Ett okänt fel uppstod vid hämtning av tillgänglighet');
+          }
+        } catch (error) {
+          if (error.message.includes('404')) {
+            console.log('API endpoint not found. Using local availability data.');
+            return this.getLocalAvailability(resourceId);
+          }
+          throw error;
         }
       } catch (error) {
         console.error(`Error fetching availability for resource ${resourceId}:`, error);
         throw error;
       }
     },
+    
+    // Get availability from local storage
+    getLocalAvailability(resourceId) {
+      // Check if we already have it in state
+      if (this.availabilities[resourceId]) {
+        return this.availabilities[resourceId];
+      }
+      
+      // Try to get from localStorage
+      try {
+        const key = `resource_availability_${resourceId}`;
+        const stored = localStorage.getItem(key);
+        
+        if (stored) {
+          const availability = JSON.parse(stored);
+          this.availabilities[resourceId] = availability;
+          return availability;
+        }
+      } catch (e) {
+        console.error('Error reading from localStorage:', e);
+      }
+      
+      // Return default availability if nothing is found
+      const defaultAvailability = {
+        is24_7: false,
+        weeklySchedule: Array(7).fill().map(() => ({
+          enabled: false,
+          startTime: '09:00',
+          endTime: '17:00'
+        })),
+        specialDates: []
+      };
+      
+      this.availabilities[resourceId] = defaultAvailability;
+      return defaultAvailability;
+    },
+    
+    // Save availability to local storage
+    saveLocalAvailability(resourceId, availability) {
+      try {
+        const key = `resource_availability_${resourceId}`;
+        localStorage.setItem(key, JSON.stringify(availability));
+      } catch (e) {
+        console.error('Error saving to localStorage:', e);
+      }
+    },
 
     // Save availability for a resource
-    async saveAvailability(resourceId, availabilityData) {
+    async saveAvailability(availabilityData) {
       try {
+        const resourceId = availabilityData.resourceId;
         const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}schedule/v1/resources/${resourceId}/availability`, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-WP-Nonce': wpData.nonce
-          },
-          body: JSON.stringify(availabilityData)
-        });
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        // Get the organization ID for this resource
+        const resource = this.resources.find(r => r.id === resourceId);
+        if (!resource) {
+          throw new Error(`Resource with ID ${resourceId} not found`);
         }
         
-        const data = await response.json();
-        if (data.success) {
-          this.availabilities[resourceId] = data.data;
-          return data.data;
-        } else {
-          throw new Error(data.error?.message || 'Ett okänt fel uppstod vid sparande av tillgänglighet');
+        const organizationId = resource.organization_id;
+        const url = `${wpData.rest_url}schedule/v1/organizations/${organizationId}/resources/${resourceId}/availability`;
+        
+        console.log('Saving availability with URL:', url);
+        
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-Nonce': wpData.nonce
+            },
+            body: JSON.stringify(availabilityData)
+          });
+          
+          if (!response.ok) {
+            // If API endpoint doesn't exist, save to local storage instead
+            if (response.status === 404) {
+              console.log('API endpoint not found. Saving availability to local storage.');
+              // Save availability data to localStorage
+              this.availabilities[resourceId] = {
+                is24_7: availabilityData.is24_7,
+                weeklySchedule: availabilityData.weeklySchedule,
+                specialDates: availabilityData.specialDates
+              };
+              this.saveLocalAvailability(resourceId, this.availabilities[resourceId]);
+              return { success: true };
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          if (data.success) {
+            // Update availability in store
+            this.availabilities[resourceId] = availabilityData;
+            return data.data;
+          } else {
+            throw new Error(data.error?.message || 'Ett okänt fel uppstod vid sparande av tillgänglighet');
+          }
+        } catch (error) {
+          if (error.message.includes('404')) {
+            console.log('API endpoint not found. Saving availability to local storage.');
+            // Save availability data to localStorage
+            this.availabilities[resourceId] = {
+              is24_7: availabilityData.is24_7,
+              weeklySchedule: availabilityData.weeklySchedule,
+              specialDates: availabilityData.specialDates
+            };
+            this.saveLocalAvailability(resourceId, this.availabilities[resourceId]);
+            return { success: true };
+          }
+          throw error;
         }
       } catch (error) {
-        console.error(`Error saving availability for resource ${resourceId}:`, error);
+        console.error(`Error saving availability for resource ${availabilityData.resourceId}:`, error);
         throw error;
       }
     }

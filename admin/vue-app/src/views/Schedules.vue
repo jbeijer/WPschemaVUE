@@ -17,9 +17,9 @@
           <label for="end-date">Till:</label>
           <input type="date" id="end-date" v-model="endDate" @change="loadSchedules">
         </div>
-        <button class="btn btn-primary" @click="showCreateForm = true" :disabled="!selectedResourceId">
+        <BaseButton variant="primary" @click="showCreateForm = true" :disabled="!selectedResourceId">
           Skapa nytt schema
-        </button>
+        </BaseButton>
       </div>
     </div>
     
@@ -47,15 +47,15 @@
             {{ selectedResource ? selectedResource.name : 'Schema' }}
           </div>
           <div class="calendar-navigation">
-            <button class="btn btn-small" @click="previousWeek">
+            <BaseButton size="small" @click="previousWeek">
               &laquo; Föregående vecka
-            </button>
+            </BaseButton>
             <span class="current-week">
               {{ formatDateRange(weekStart, weekEnd) }}
             </span>
-            <button class="btn btn-small" @click="nextWeek">
+            <BaseButton size="small" @click="nextWeek">
               Nästa vecka &raquo;
-            </button>
+            </BaseButton>
           </div>
         </div>
         
@@ -161,12 +161,12 @@
               </select>
             </div>
             <div class="form-actions">
-              <button type="button" class="btn btn-secondary" @click="showCreateForm = false">
+              <BaseButton type="button" variant="secondary" @click="showCreateForm = false">
                 Avbryt
-              </button>
-              <button type="submit" class="btn btn-primary" :disabled="createLoading">
+              </BaseButton>
+              <BaseButton type="submit" variant="primary" :loading="createLoading">
                 {{ createLoading ? 'Skapar...' : 'Skapa' }}
-              </button>
+              </BaseButton>
             </div>
           </form>
         </div>
@@ -212,12 +212,12 @@
               </select>
             </div>
             <div class="form-actions">
-              <button type="button" class="btn btn-secondary" @click="closeViewModal">
+              <BaseButton type="button" variant="secondary" @click="closeViewModal">
                 Avbryt
-              </button>
-              <button type="submit" class="btn btn-primary" :disabled="updateLoading">
+              </BaseButton>
+              <BaseButton type="submit" variant="primary" :loading="updateLoading">
                 {{ updateLoading ? 'Sparar...' : 'Spara' }}
-              </button>
+              </BaseButton>
             </div>
           </form>
           
@@ -232,12 +232,12 @@
             <p><strong>Senast uppdaterad:</strong> {{ formatDateTime(selectedSchedule.updated_at) }}</p>
             
             <div class="schedule-actions">
-              <button class="btn" @click="isEditMode = true">
+              <BaseButton @click="isEditMode = true">
                 Redigera
-              </button>
-              <button class="btn btn-danger" @click="confirmDelete(selectedSchedule)">
+              </BaseButton>
+              <BaseButton variant="danger" @click="confirmDelete(selectedSchedule)">
                 Ta bort
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -256,12 +256,12 @@
           <p class="warning">Denna åtgärd kan inte ångras!</p>
           
           <div class="form-actions">
-            <button type="button" class="btn btn-secondary" @click="showDeleteConfirmation = false">
+            <BaseButton type="button" variant="secondary" @click="showDeleteConfirmation = false">
               Avbryt
-            </button>
-            <button type="button" class="btn btn-danger" @click="deleteSchedule" :disabled="deleteLoading">
+            </BaseButton>
+            <BaseButton type="button" variant="danger" @click="deleteSchedule" :loading="deleteLoading">
               {{ deleteLoading ? 'Tar bort...' : 'Ta bort' }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -274,9 +274,13 @@ import { useResourcesStore } from '@/stores/resources';
 import { useSchedulesStore } from '@/stores/schedules';
 import { useUsersStore } from '@/stores/users';
 import { useOrganizationsStore } from '@/stores/organizations';
+import BaseButton from '@/components/BaseButton.vue';
 
 export default {
   name: 'Schedules',
+  components: {
+    BaseButton
+  },
   data() {
     return {
       loading: false,
@@ -954,119 +958,6 @@ export default {
 
 .status-completed {
   border-left: 3px solid #999;
-}
-
-.btn {
-  display: inline-block;
-  background-color: #0073aa;
-  color: #fff;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: none;
-  text-align: center;
-  transition: background-color 0.2s;
-}
-
-.btn:hover {
-  background-color: #005177;
-}
-
-.btn:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background-color: #0073aa;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-}
-
-.btn-danger {
-  background-color: #dc3545;
-}
-
-.btn-danger:hover {
-  background-color: #bd2130;
-}
-
-.btn-small {
-  padding: 4px 8px;
-  font-size: 0.9em;
-}
-
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: #fff;
-  border-radius: 4px;
-  width: 500px;
-  max-width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px 20px;
-  border-bottom: 1px solid #e5e5e5;
-}
-
-.modal-header h3 {
-  margin: 0;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 1.5em;
-  cursor: pointer;
-  color: #6c757d;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-group {
-  margin-bottom: 15px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.form-group textarea {
-  resize: vertical;
 }
 
 .form-actions {

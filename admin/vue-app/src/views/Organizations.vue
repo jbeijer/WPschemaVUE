@@ -2,11 +2,12 @@
   <div class="organizations">
     <div class="organizations-header">
       <h2>Organisationer</h2>
-      <button class="btn btn-primary" @click="showCreateForm = true">
+      <BaseButton variant="primary" @click="openCreateModal">
         Skapa ny organisation
-      </button>
+      </BaseButton>
     </div>
     
+    <!-- Loading and Error States -->
     <div class="loading-indicator" v-if="loading">
       <p>Laddar organisationer...</p>
     </div>
@@ -15,6 +16,7 @@
       <p>{{ error }}</p>
     </div>
     
+    <!-- Organizations Table -->
     <div class="organizations-content" v-if="!loading && !error">
       <div class="organizations-tree">
         <table class="organizations-table">
@@ -27,23 +29,35 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="org in organizationFlatList" :key="org.id" :class="{ 'child-org': org.level > 0 }">
+            <tr 
+              v-for="org in organizationFlatList" 
+              :key="org.id" 
+              :class="{ 'child-org': org.level > 0 }"
+            >
               <td>
-                <span class="indent" :style="{ width: org.level * 20 + 'px' }"></span>
+                <span 
+                  class="indent" 
+                  :style="{ width: org.level * 20 + 'px' }"
+                ></span>
                 <span class="org-name">{{ org.name }}</span>
               </td>
               <td>{{ org.children_count || 0 }}</td>
               <td>{{ formatDate(org.created_at) }}</td>
               <td class="actions">
-                <button class="btn btn-small" @click="viewOrganization(org)">
+                <BaseButton size="small" @click="viewOrganization(org)">
                   Visa
-                </button>
-                <button class="btn btn-small" @click="editOrganization(org)">
+                </BaseButton>
+                <BaseButton size="small" @click="editOrganization(org)">
                   Redigera
-                </button>
-                <button class="btn btn-small btn-danger" @click="confirmDelete(org)" :disabled="org.children_count > 0">
+                </BaseButton>
+                <BaseButton 
+                  size="small" 
+                  variant="danger" 
+                  @click="confirmDelete(org)" 
+                  :disabled="org.children_count > 0"
+                >
                   Ta bort
-                </button>
+                </BaseButton>
               </td>
             </tr>
           </tbody>
@@ -51,416 +65,125 @@
       </div>
     </div>
     
-    <!-- Create Organization Modal -->
-    <div class="modal" v-if="showCreateForm" @click.self="showCreateForm = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Skapa ny organisation</h3>
-          <button class="close-button" @click="showCreateForm = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="createOrganization">
-            <div class="form-group">
-              <label for="name">Namn</label>
-              <input type="text" id="name" v-model="newOrganization.name" required>
-            </div>
-            <div class="form-group">
-              <label for="parent_id">Föräldraorganisation</label>
-              <select id="parent_id" v-model="newOrganization.parent_id">
-                <option :value="null">Ingen (huvudorganisation)</option>
-                <option v-for="org in organizations" :key="org.id" :value="org.id">
-                  {{ org.name }}
-                </option>
-              </select>
-            </div>
-            <div class="form-actions">
-              <button type="button" class="btn btn-secondary" @click="showCreateForm = false">
-                Avbryt
-              </button>
-              <button type="submit" class="btn btn-primary" :disabled="createLoading">
-                {{ createLoading ? 'Skapar...' : 'Skapa' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <!-- Organization Modals -->
+    <OrganizationFormModal
+      v-if="showCreateForm"
+      :organization="newOrganization"
+      :loading="createLoading"
+      :parent-options="organizations"
+      @close="showCreateForm = false"
+      @submit="onCreateFormSubmit"
+    />
     
-    <!-- Edit Organization Modal -->
-    <div class="modal" v-if="showEditForm" @click.self="showEditForm = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Redigera organisation</h3>
-          <button class="close-button" @click="showEditForm = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="updateOrganization">
-            <div class="form-group">
-              <label for="edit-name">Namn</label>
-              <input type="text" id="edit-name" v-model="editedOrganization.name" required>
-            </div>
-            <div class="form-group">
-              <label for="edit-parent_id">Föräldraorganisation</label>
-              <select id="edit-parent_id" v-model="editedOrganization.parent_id">
-                <option :value="null">Ingen (huvudorganisation)</option>
-                <option v-for="org in validParentOrganizations" :key="org.id" :value="org.id">
-                  {{ org.name }}
-                </option>
-              </select>
-            </div>
-            <div class="form-actions">
-              <button type="button" class="btn btn-secondary" @click="showEditForm = false">
-                Avbryt
-              </button>
-              <button type="submit" class="btn btn-primary" :disabled="updateLoading">
-                {{ updateLoading ? 'Sparar...' : 'Spara' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <OrganizationFormModal
+      v-if="showEditForm"
+      :organization="editedOrganization"
+      :loading="updateLoading"
+      :parent-options="validParentOrganizations"
+      @close="showEditForm = false"
+      @submit="updateOrganization"
+      title="Redigera organisation"
+      submit-text="Spara"
+    />
+
+    <OrganizationViewModal
+      v-if="showViewModal"
+      :organization="selectedOrganization"
+      :users="organizationUsers"
+      :resources="organizationResources"
+      :users-loading="usersLoading"
+      :resources-loading="resourcesLoading"
+      @close="showViewModal = false"
+      @add-user="showAddUserForm = true"
+      @edit-user="editUserRole"
+      @remove-user="confirmRemoveUser"
+      @add-resource="openResourceForm(false)"
+      @edit-resource="editResource"
+      @delete-resource="confirmDeleteResource"
+      @change-tab="handleTabChange"
+    />
     
-    <!-- View Organization Modal -->
-    <div class="modal" v-if="showViewModal" @click.self="showViewModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>{{ selectedOrganization ? selectedOrganization.name : 'Organisation' }}</h3>
-          <button class="close-button" @click="showViewModal = false">&times;</button>
-        </div>
-        <div class="modal-body" v-if="selectedOrganization">
-          <div class="organization-details">
-            <p><strong>ID:</strong> {{ selectedOrganization.id }}</p>
-            <p><strong>Namn:</strong> {{ selectedOrganization.name }}</p>
-            <p><strong>Föräldraorganisation:</strong> {{ getParentOrganizationName(selectedOrganization.parent_id) }}</p>
-            <p><strong>Skapad:</strong> {{ formatDate(selectedOrganization.created_at) }}</p>
-            <p><strong>Senast uppdaterad:</strong> {{ formatDate(selectedOrganization.updated_at) }}</p>
-            <p><strong>Antal underorganisationer:</strong> {{ selectedOrganization.children_count || 0 }}</p>
-          </div>
-
-          <div class="tabs">
-            <div class="tab-header">
-              <button 
-                class="tab-button" 
-                :class="{ active: activeTab === 'users' }"
-                @click="activeTab = 'users'"
-              >
-                Användare
-              </button>
-              <button 
-                class="tab-button" 
-                :class="{ active: activeTab === 'resources' }"
-                @click="activeTab = 'resources'"
-              >
-                Resurser
-              </button>
-            </div>
-
-            <div class="tab-content">
-              <div v-if="activeTab === 'users'" class="tab-pane">
-                <div class="tab-actions">
-                  <button class="btn btn-primary" @click="showAddUserForm = true">
-                    Lägg till användare
-                  </button>
-                </div>
-
-                <div class="user-list" v-if="!usersLoading">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Namn</th>
-                        <th>E-post</th>
-                        <th>Roll</th>
-                        <th>Andra organisationer</th>
-                        <th>Åtgärder</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="user in organizationUsers" :key="user.id">
-                        <td>{{ user.user_data.display_name }}</td>
-                        <td>{{ user.user_data.user_email }}</td>
-                        <td>{{ translateRole(user.role) }}</td>
-                        <td>
-                          <div class="org-chips-container">
-                            <span v-if="!user.organizations || user.organizations.length <= 1" class="no-orgs">
-                              <i class="dashicons dashicons-businessman"></i> Endast denna organisation
-                            </span>
-                            <div v-else class="org-chips">
-                              <div v-for="orgId in user.organizations" :key="orgId" 
-                                   v-if="orgId !== selectedOrganization.id"
-                                   class="org-chip" 
-                                   :class="getRoleClass(user.organization_roles?.[orgId])">
-                                <span class="org-chip-icon">
-                                  <i class="dashicons dashicons-building"></i>
-                                </span>
-                                <span class="org-chip-name">{{ getOrganizationName(orgId) }}</span>
-                                <span class="org-chip-role">{{ translateRole(user.organization_roles?.[orgId] || 'unknown') }}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td class="actions">
-                          <button class="btn btn-small" @click="editUserRole(user)">
-                            Ändra roll
-                          </button>
-                          <button class="btn btn-small btn-danger" @click="confirmRemoveUser(user)">
-                            Ta bort
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div v-else class="loading">
-                  Laddar användare...
-                </div>
-              </div>
-
-              <div v-if="activeTab === 'resources'" class="tab-pane">
-                <div class="tab-actions">
-                  <button class="btn btn-primary" @click="showResourceForm = true">
-                    Hantera resurser
-                  </button>
-                </div>
-
-                <div class="resource-list" v-if="!resourcesLoading">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Namn</th>
-                        <th>Beskrivning</th>
-                        <th>Tillgänglighet</th>
-                        <th>Åtgärder</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="resource in organizationResources" :key="resource.id">
-                        <td>{{ resource.name }}</td>
-                        <td>{{ resource.description || 'Ingen beskrivning' }}</td>
-                        <td>
-                          <span v-if="resource.is_24_7">Tillgänglig 24/7</span>
-                          <span v-else>{{ resource.start_time }} - {{ resource.end_time }}</span>
-                        </td>
-                        <td class="actions">
-                          <button class="btn btn-small" @click="editResource(resource)">
-                            Redigera
-                          </button>
-                          <button class="btn btn-small btn-danger" @click="confirmDeleteResource(resource)">
-                            Ta bort
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div v-else class="loading">
-                  Laddar resurser...
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      v-if="showDeleteConfirmation"
+      title="Ta bort organisation"
+      :message="`Är du säker på att du vill ta bort ${organizationToDelete?.name}?`"
+      confirmText="Ta bort"
+      @confirm="deleteOrganization"
+      @cancel="showDeleteConfirmation = false"
+    />
     
-    <!-- Delete Confirmation Modal -->
-    <div class="modal" v-if="showDeleteConfirmation" @click.self="showDeleteConfirmation = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Bekräfta borttagning</h3>
-          <button class="close-button" @click="showDeleteConfirmation = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p>Är du säker på att du vill ta bort organisationen "{{ organizationToDelete ? organizationToDelete.name : '' }}"?</p>
-          <p class="warning">Denna åtgärd kan inte ångras!</p>
-          
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary" @click="showDeleteConfirmation = false">
-              Avbryt
-            </button>
-            <button type="button" class="btn btn-danger" @click="deleteOrganization" :disabled="deleteLoading">
-              {{ deleteLoading ? 'Tar bort...' : 'Ta bort' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Add User Modal -->
-    <div class="modal" v-if="showAddUserForm" @click.self="showAddUserForm = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Lägg till användare i organisationen</h3>
-          <button class="close-button" @click="showAddUserForm = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="addUser">
-            <div class="form-group">
-              <label for="user-select">Välj användare</label>
-              <select id="user-select" v-model="newUserAssignment.user_id" required>
-                <option disabled value="">Välj en användare</option>
-                <option v-for="user in allUsers" :key="user.id" :value="user.id">
-                  {{ user.user_data.display_name }} ({{ user.user_data.user_email }})
-                </option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="role-select">Välj roll</label>
-              <select id="role-select" v-model="newUserAssignment.role" required>
-                <option disabled value="">Välj roll</option>
-                <option value="base">Bas</option>
-                <option value="scheduler">Schemaläggare</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div class="form-actions">
-              <button type="button" class="btn btn-secondary" @click="showAddUserForm = false">
-                Avbryt
-              </button>
-              <button type="submit" class="btn btn-primary" :disabled="addUserLoading">
-                {{ addUserLoading ? 'Lägger till...' : 'Lägg till' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <!-- Edit User Modal -->
-    <div class="modal" v-if="showEditUserModal" @click.self="showEditUserModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Hantera användare: {{ selectedUser?.user_data?.display_name }}</h3>
-          <button class="close-button" @click="showEditUserModal = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="saveUserRole">
-            <div class="form-group">
-              <label>Nuvarande organisation: {{ getOrganizationName(selectedOrganization.id) }}</label>
-              <div class="current-org-controls">
-                <select id="new-role" v-model="selectedUser.newRole" required>
-                  <option value="">Välj en roll</option>
-                  <option value="base">Bas</option>
-                  <option value="schemalaggare">Schemaläggare</option>
-                  <option value="schemaanmain">Admin</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group" v-if="selectedUser.organizations && selectedUser.organizations.length > 0">
-              <label>Andra organisationer</label>
-              <div class="organizations-list">
-                <div v-for="orgId in selectedUser.organizations" :key="orgId" class="organization-item" v-if="orgId !== selectedOrganization.id">
-                  <div class="org-info">
-                    <span class="org-name">{{ getOrganizationName(orgId) }}</span>
-                    <span class="org-role-badge" :class="getRoleClass(selectedUser.organization_roles?.[orgId])">
-                      {{ translateRole(selectedUser.organization_roles?.[orgId] || 'unknown') }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-actions">
-              <button type="button" class="btn btn-danger" @click="confirmRemoveFromCurrentOrg">
-                Ta bort från organisationen
-              </button>
-              <div class="form-actions-right">
-                <button type="button" class="btn btn-secondary" @click="showEditUserModal = false">
-                  Avbryt
-                </button>
-                <button type="submit" class="btn btn-primary" :disabled="saveUserLoading">
-                  {{ saveUserLoading ? 'Sparar...' : 'Spara' }}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <!-- Resource Form Modal -->
-    <div class="modal" v-if="showResourceForm" @click.self="showResourceForm = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>{{ editingResource ? 'Redigera resurs' : 'Skapa ny resurs' }}</h3>
-          <button class="close-button" @click="showResourceForm = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="saveResource">
-            <div class="form-group">
-              <label for="resource-name">Namn</label>
-              <input type="text" id="resource-name" v-model="resourceForm.name" required>
-            </div>
-            <div class="form-group">
-              <label for="resource-description">Beskrivning</label>
-              <textarea id="resource-description" v-model="resourceForm.description" rows="3"></textarea>
-            </div>
-            <div class="form-group">
-              <label>Tillgänglighet</label>
-              <div class="availability-options">
-                <div class="radio-option">
-                  <input type="radio" id="available-24-7" v-model="resourceForm.is_24_7" :value="true">
-                  <label for="available-24-7">Tillgänglig 24/7</label>
-                </div>
-                <div class="radio-option">
-                  <input type="radio" id="available-specific" v-model="resourceForm.is_24_7" :value="false">
-                  <label for="available-specific">Tillgänglig under specifika tider</label>
-                </div>
-              </div>
-            </div>
-            <div class="form-group" v-if="!resourceForm.is_24_7">
-              <div class="time-inputs">
-                <div class="time-input">
-                  <label for="start-time">Starttid</label>
-                  <input type="time" id="start-time" v-model="resourceForm.start_time" required>
-                </div>
-                <div class="time-input">
-                  <label for="end-time">Sluttid</label>
-                  <input type="time" id="end-time" v-model="resourceForm.end_time" required>
-                </div>
-              </div>
-            </div>
-            <div class="form-actions">
-              <button type="button" class="btn btn-secondary" @click="showResourceForm = false">
-                Avbryt
-              </button>
-              <button type="submit" class="btn btn-primary" :disabled="resourceLoading">
-                {{ resourceLoading ? 'Sparar...' : 'Spara' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <!-- User Management Modals -->
+    <UserFormModal
+      v-if="showAddUserForm"
+      :users="availableUsers"
+      :selected-organization="selectedOrganization"
+      :loading="addUserLoading"
+      @close="showAddUserForm = false"
+      @submit="addUser"
+    />
+    
+    <UserRoleModal
+      v-if="showEditUserModal"
+      :user="selectedUser"
+      :organization="selectedOrganization"
+      :loading="updateUserLoading"
+      @close="showEditUserModal = false"
+      @save="saveUserRole"
+      @remove="confirmRemoveFromCurrentOrg"
+    />
+    
+    <!-- Resource Management Modal -->
+    <ResourceFormModal
+      v-if="showResourceForm"
+      :resource="currentResource"
+      :is-editing="!!editingResource"
+      :loading="resourceLoading"
+      @close="showResourceForm = false"
+      @submit="saveResource"
+    />
   </div>
 </template>
 
 <script>
+import { defineComponent } from 'vue';
 import { useOrganizationsStore } from '@/stores/organizations';
 import { useUsersStore } from '@/stores/users';
 import { useResourcesStore } from '@/stores/resources';
+import { formatDate } from '@/utils/dateUtils';
+import { translateRole, getRoleClass } from '@/utils/roleUtils';
+import BaseButton from '@/components/BaseButton.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import OrganizationFormModal from '@/components/organizations/OrganizationFormModal.vue';
+import OrganizationViewModal from '@/components/organizations/OrganizationViewModal.vue';
+import UserFormModal from '@/components/users/UserFormModal.vue';
+import UserRoleModal from '@/components/users/UserRoleModal.vue';
+import ResourceFormModal from '@/components/resources/ResourceFormModal.vue';
 
-export default {
+export default defineComponent({
   name: 'Organizations',
+  
+  components: {
+    BaseButton,
+    ConfirmDialog,
+    OrganizationFormModal,
+    OrganizationViewModal,
+    UserFormModal,
+    UserRoleModal,
+    ResourceFormModal
+  },
+  
   data() {
     return {
+      // Organization state
       loading: false,
       error: null,
       showCreateForm: false,
       showEditForm: false,
       showViewModal: false,
-      showDeleteConfirmation: false,
-      showAddUserForm: false,
-      showEditUserModal: false,
-      showResourceForm: false,
       createLoading: false,
       updateLoading: false,
-      deleteLoading: false,
-      usersLoading: false,
-      resourcesLoading: false,
-      addUserLoading: false,
-      saveUserLoading: false,
+      
+      // Organization data
       newOrganization: {
         name: '',
         parent_id: null
@@ -470,104 +193,135 @@ export default {
         name: '',
         parent_id: null
       },
-      newUserAssignment: {
-        user_id: '',
-        role: ''
-      },
       selectedOrganization: null,
       organizationToDelete: null,
+      showDeleteConfirmation: false,
+      
+      // User management
       activeTab: 'users',
+      usersLoading: false,
       organizationUsers: [],
-      organizationResources: [],
+      showAddUserForm: false,
+      addUserLoading: false,
+      
+      // User editing
+      showEditUserModal: false,
       selectedUser: null,
+      updateUserLoading: false,
+      
+      // Resource management
+      resourcesLoading: false,
+      organizationResources: [],
+      showResourceForm: false,
       editingResource: null,
-      resourceForm: {
+      resourceLoading: false,
+      currentResource: {
         name: '',
         description: '',
-        is_24_7: true,
-        start_time: '',
-        end_time: ''
-      },
-      resourceLoading: false
+        type: 'room',
+        meta: {}
+      }
     };
   },
+  
   computed: {
     organizations() {
       return this.organizationsStore.organizations;
     },
+    
     organizationFlatList() {
       return this.organizationsStore.getOrganizationFlatList;
     },
-    validParentOrganizations() {
-      if (!this.editedOrganization || !this.editedOrganization.id) {
-        return this.organizations;
-      }
-      
-      // Filter out the current organization and its descendants
-      return this.organizations.filter(org => {
-        // Can't be its own parent
-        if (org.id === this.editedOrganization.id) {
-          return false;
-        }
-        
-        // Can't be a descendant
-        if (org.path && org.path.includes('/' + this.editedOrganization.id + '/')) {
-          return false;
-        }
-        
-        return true;
-      });
-    },
+    
     allUsers() {
-      return this.usersStore.allUsers;
+      return this.usersStore.users;
+    },
+    
+    validParentOrganizations() {
+      if (!this.editedOrganization?.id) return this.organizations;
+      
+      // Function to check if org is a descendant of the current org
+      const isDescendant = (org, targetId) => {
+        if (!org) return false;
+        if (org.id === targetId) return true;
+        
+        const children = this.organizations.filter(o => o.parent_id === org.id);
+        return children.some(child => isDescendant(child, targetId));
+      };
+      
+      // Filter out the edited org and its descendants
+      return this.organizations.filter(org => 
+        org.id !== this.editedOrganization.id && 
+        !isDescendant(org, this.editedOrganization.id)
+      );
+    },
+    
+    availableUsers() {
+      // Filter users who are not already in the organization
+      const existingUserIds = this.organizationUsers.map(u => u.user_id);
+      return this.allUsers.filter(user => !existingUserIds.includes(user.ID));
     }
   },
+  
   created() {
     this.organizationsStore = useOrganizationsStore();
     this.usersStore = useUsersStore();
     this.resourcesStore = useResourcesStore();
-    
     this.loadOrganizations();
   },
+  
   methods: {
+    // Organization CRUD operations
     async loadOrganizations() {
       this.loading = true;
       this.error = null;
       
       try {
         await this.organizationsStore.fetchOrganizations();
-      } catch (error) {
-        console.error('Error loading organizations:', error);
-        this.error = 'Det gick inte att ladda organisationer: ' + error.message;
+      } catch (err) {
+        this.error = 'Kunde inte ladda organisationer: ' + (err.message || 'Okänt fel');
       } finally {
         this.loading = false;
       }
+    },
+    
+    openCreateModal() {
+      this.newOrganization = {
+        name: '',
+        parent_id: null
+      };
+      this.showCreateForm = true;
+    },
+    
+    onCreateFormSubmit(formData) {
+      this.newOrganization = { ...formData };
+      this.createOrganization();
     },
     
     async createOrganization() {
       this.createLoading = true;
       
       try {
+        // Validate organization data
+        if (!this.newOrganization.name || !this.newOrganization.name.trim()) {
+          this.error = 'Organisationsnamn måste anges';
+          this.createLoading = false;
+          return;
+        }
+        
+        console.log('Creating organization with data:', JSON.stringify(this.newOrganization));
         await this.organizationsStore.createOrganization(this.newOrganization);
         this.showCreateForm = false;
-        this.newOrganization = {
-          name: '',
-          parent_id: null
-        };
-      } catch (error) {
-        console.error('Error creating organization:', error);
-        alert('Det gick inte att skapa organisationen: ' + error.message);
+        this.newOrganization = { name: '', parent_id: null };
+      } catch (err) {
+        this.error = 'Kunde inte skapa organisation: ' + (err.message || 'Okänt fel');
       } finally {
         this.createLoading = false;
       }
     },
     
     editOrganization(organization) {
-      this.editedOrganization = {
-        id: organization.id,
-        name: organization.name,
-        parent_id: organization.parent_id
-      };
+      this.editedOrganization = { ...organization };
       this.showEditForm = true;
     },
     
@@ -575,416 +329,281 @@ export default {
       this.updateLoading = true;
       
       try {
-        await this.organizationsStore.updateOrganization(
-          this.editedOrganization.id,
-          {
-            name: this.editedOrganization.name,
-            parent_id: this.editedOrganization.parent_id
-          }
-        );
+        await this.organizationsStore.updateOrganization(this.editedOrganization);
         this.showEditForm = false;
-      } catch (error) {
-        console.error('Error updating organization:', error);
-        alert('Det gick inte att uppdatera organisationen: ' + error.message);
+      } catch (err) {
+        this.error = 'Kunde inte uppdatera organisation: ' + (err.message || 'Okänt fel');
       } finally {
         this.updateLoading = false;
       }
     },
     
     confirmDelete(organization) {
-      if (organization.children_count > 0) {
-        alert('Kan inte ta bort en organisation med underorganisationer.');
-        return;
-      }
+      if (organization.children_count > 0) return;
       
       this.organizationToDelete = organization;
       this.showDeleteConfirmation = true;
     },
     
     async deleteOrganization() {
-      if (!this.organizationToDelete) {
-        return;
-      }
-      
-      this.deleteLoading = true;
+      if (!this.organizationToDelete) return;
       
       try {
         await this.organizationsStore.deleteOrganization(this.organizationToDelete.id);
         this.showDeleteConfirmation = false;
         this.organizationToDelete = null;
-      } catch (error) {
-        console.error('Error deleting organization:', error);
-        alert('Det gick inte att ta bort organisationen: ' + error.message);
-      } finally {
-        this.deleteLoading = false;
+      } catch (err) {
+        this.error = 'Kunde inte ta bort organisation: ' + (err.message || 'Okänt fel');
       }
     },
     
+    // View organization details
     async viewOrganization(organization) {
       this.selectedOrganization = organization;
       this.activeTab = 'users';
       this.showViewModal = true;
       
-      // Load users for this organization
+      // Load users on open
       await this.loadOrganizationUsers(organization.id);
     },
     
+    async handleTabChange(tab) {
+      this.activeTab = tab;
+      
+      if (tab === 'users' && this.selectedOrganization) {
+        await this.loadOrganizationUsers(this.selectedOrganization.id);
+      } else if (tab === 'resources' && this.selectedOrganization) {
+        await this.loadOrganizationResources(this.selectedOrganization.id);
+      }
+    },
+    
+    // Load organization data
     async loadOrganizationUsers(organizationId) {
+      if (!organizationId) return;
+      
       this.usersLoading = true;
+      this.organizationUsers = [];
       
       try {
-        const wpData = window.wpScheduleData || {};
-        const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${organizationId}/users`, {
-          method: 'GET',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-WP-Nonce': wpData.nonce
-          }
-        });
+        const response = await this.usersStore.fetchUsersByOrganization(organizationId);
+        this.organizationUsers = response;
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const users = await response.json();
-        
-        // Process organization data for each user
-        if (users && Array.isArray(users)) {
-          // Fetch organizations and roles for each user
-          const userPromises = users.map(async (user) => {
-            try {
-              const userOrgsResponse = await fetch(`${wpData.rest_url}schedule/v1/users/${user.user_id}/organizations`, {
-                method: 'GET',
-                credentials: 'same-origin',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-WP-Nonce': wpData.nonce
-                }
-              });
-              
-              if (userOrgsResponse.ok) {
-                const userOrgs = await userOrgsResponse.json();
-                return {
-                  ...user,
-                  organizations: userOrgs.map(org => org.id),
-                  organization_roles: userOrgs.reduce((acc, org) => {
-                    acc[org.id] = org.role;
-                    return acc;
-                  }, {})
-                };
+        // If users have other organizations, fetch any missing organizations
+        const otherOrgIds = new Set();
+        for (const user of this.organizationUsers) {
+          if (user.organizations?.length) {
+            for (const orgId of user.organizations) {
+              if (orgId !== organizationId) {
+                otherOrgIds.add(orgId);
               }
-              return user;
-            } catch (error) {
-              console.error(`Error fetching organizations for user ${user.user_id}:`, error);
-              return user;
             }
-          });
-          
-          const processedUsers = await Promise.all(userPromises);
-          this.organizationUsers = processedUsers;
-          
-          // Ensure we have all organizations data
-          const allOrgIds = new Set();
-          processedUsers.forEach(user => {
-            if (user.organizations && Array.isArray(user.organizations)) {
-              user.organizations.forEach(orgId => {
-                if (orgId) {
-                  allOrgIds.add(orgId);
-                }
-              });
-            }
-          });
-          
-          // Fetch any missing organizations
-          const missingOrgIds = [...allOrgIds].filter(orgId => 
-            !this.organizations.some(org => org.id === orgId)
-          );
-          
-          if (missingOrgIds.length > 0) {
-            await this.fetchMissingOrganizations(missingOrgIds);
           }
         }
-      } catch (error) {
-        console.error('Error loading organization users:', error);
+        
+        if (otherOrgIds.size > 0) {
+          await this.fetchMissingOrganizations([...otherOrgIds]);
+        }
+      } catch (err) {
+        this.error = 'Kunde inte ladda användare: ' + (err.message || 'Okänt fel');
       } finally {
         this.usersLoading = false;
       }
     },
     
     async loadOrganizationResources(organizationId) {
+      if (!organizationId) return;
+      
       this.resourcesLoading = true;
+      this.organizationResources = [];
       
       try {
-        await this.resourcesStore.fetchResourcesByOrganization(organizationId);
-        this.organizationResources = this.resourcesStore.resources;
-      } catch (error) {
-        console.error('Error loading organization resources:', error);
+        this.organizationResources = await this.resourcesStore.fetchOrganizationResources(organizationId);
+      } catch (err) {
+        this.error = 'Kunde inte ladda resurser: ' + (err.message || 'Okänt fel');
       } finally {
         this.resourcesLoading = false;
       }
     },
     
-    getParentOrganizationName(parentId) {
-      if (!parentId) {
-        return 'Ingen (huvudorganisation)';
-      }
-      
-      const parent = this.organizations.find(org => org.id === parentId);
-      return parent ? parent.name : 'Okänd';
-    },
-    
-    getOrganizationName(orgId) {
-      if (!orgId) {
-        return 'Okänd';
-      }
-      
-      const org = this.organizationsStore.organizations.find(org => org.id === orgId);
-      return org ? org.name : 'Okänd';
-    },
-    
-    getOrganizationObject(orgId) {
-      if (!orgId) {
-        return null;
-      }
-      
-      const org = this.organizations.find(org => org.id === orgId);
-      return org ? org : null;
-    },
-    
-    formatDate(dateString) {
-      if (!dateString) {
-        return '-';
-      }
-      
-      const date = new Date(dateString);
-      return date.toLocaleString('sv-SE');
-    },
-    
-    translateRole(role) {
-      switch (role) {
-        case 'admin':
-        case 'schemaanmain':
-          return 'Admin';
-        case 'scheduler':
-        case 'schemalaggare':
-          return 'Schemaläggare';
-        case 'base':
-          return 'Bas';
-        case 'wpschema_anvandare':
-          return 'WP Schema Användare';
-        default:
-          return role;
-      }
-    },
-    async editUserRole(user) {
-      this.selectedUser = {
-        ...user,
-        newRole: user.role, // Sätt nuvarande roll som default
-        organization_roles: user.organization_roles || {} // Lägg till organization_roles
-      };
+    // User management
+    editUserRole(user) {
+      this.selectedUser = user;
       this.showEditUserModal = true;
     },
-    async saveUserRole() {
-      if (!this.selectedUser || !this.selectedUser.newRole) {
-        alert('Välj en giltig roll');
-        return;
-      }
-
-      this.saveUserLoading = true;
+    
+    async saveUserRole(userData) {
+      if (!this.selectedUser || !this.selectedOrganization) return;
+      
+      this.updateUserLoading = true;
+      
       try {
-        await this.usersStore.updateUserRole(
-          this.selectedOrganization.id,
-          this.selectedUser.user_id,
-          this.selectedUser.newRole
-        );
+        await this.usersStore.updateUserRole({
+          user_id: this.selectedUser.user_id,
+          organization_id: this.selectedOrganization.id,
+          role: userData.role
+        });
+        
+        // Refresh user list
         await this.loadOrganizationUsers(this.selectedOrganization.id);
         this.showEditUserModal = false;
-        this.selectedUser = null;
-      } catch (error) {
-        alert("Fel vid uppdatering av roll: " + error.message);
+      } catch (err) {
+        this.error = 'Kunde inte uppdatera användarens roll: ' + (err.message || 'Okänt fel');
       } finally {
-        this.saveUserLoading = false;
+        this.updateUserLoading = false;
       }
     },
+    
     confirmRemoveUser(user) {
-      if (confirm(`Är du säker på att du vill ta bort ${user.user_data.display_name} från organisationen?`)) {
-        this.removeUser(user);
+      this.selectedUser = user;
+      this.confirmRemoveFromCurrentOrg();
+    },
+    
+    confirmRemoveFromCurrentOrg() {
+      if (confirm(`Är du säker på att du vill ta bort ${this.selectedUser?.user_data?.display_name} från denna organisation?`)) {
+        this.removeFromCurrentOrg();
       }
     },
-    async removeUser(user) {
+    
+    async removeFromCurrentOrg() {
+      if (!this.selectedUser || !this.selectedOrganization) return;
+      
       try {
-        await this.usersStore.removeUserFromOrganization(this.selectedOrganization.id, user.user_id);
+        await this.usersStore.removeUserFromOrganization({
+          user_id: this.selectedUser.user_id,
+          organization_id: this.selectedOrganization.id
+        });
+        
         await this.loadOrganizationUsers(this.selectedOrganization.id);
-      } catch (error) {
-        alert("Fel vid borttagning: " + error.message);
+        this.showEditUserModal = false;
+      } catch (err) {
+        this.error = 'Kunde inte ta bort användaren från organisationen: ' + (err.message || 'Okänt fel');
       }
     },
-    async addUser() {
+    
+    async addUser(userData) {
+      if (!this.selectedOrganization || !userData.user_id) return;
+      
       this.addUserLoading = true;
+      
       try {
-        await this.usersStore.addUserToOrganization(this.selectedOrganization.id, this.newUserAssignment);
+        await this.usersStore.addUserToOrganization({
+          user_id: userData.user_id,
+          organization_id: this.selectedOrganization.id,
+          role: userData.role
+        });
+        
         await this.loadOrganizationUsers(this.selectedOrganization.id);
         this.showAddUserForm = false;
-        this.newUserAssignment = { user_id: '', role: '' };
-      } catch (error) {
-        alert("Fel vid tillägg av användare: " + error.message);
+      } catch (err) {
+        this.error = 'Kunde inte lägga till användaren: ' + (err.message || 'Okänt fel');
       } finally {
         this.addUserLoading = false;
       }
     },
-    confirmRemoveFromOrganization(organizationId) {
-      if (confirm(`Är du säker på att du vill ta bort ${this.selectedUser.user_data.display_name} från ${this.getOrganizationName(organizationId)}?`)) {
-        this.removeFromOrganization(organizationId);
-      }
-    },
-    async removeFromOrganization(organizationId) {
-      try {
-        await this.usersStore.removeUserFromOrganization(organizationId, this.selectedUser.user_id);
-        // Uppdatera selectedUser för att reflektera borttagningen
-        this.selectedUser.organizations = this.selectedUser.organizations.filter(id => id !== organizationId);
-        delete this.selectedUser.role;
-      } catch (error) {
-        alert("Fel vid borttagning från organisation: " + error.message);
-      }
-    },
-    confirmRemoveFromCurrentOrg() {
-      if (confirm(`Är du säker på att du vill ta bort ${this.selectedUser.user_data.display_name} från ${this.getOrganizationName(this.selectedOrganization.id)}?`)) {
-        this.removeFromCurrentOrg();
-      }
-    },
-    async removeFromCurrentOrg() {
-      try {
-        await this.usersStore.removeUserFromOrganization(this.selectedOrganization.id, this.selectedUser.user_id);
-        this.showEditUserModal = false;
-        await this.loadOrganizationUsers(this.selectedOrganization.id);
-      } catch (error) {
-        alert("Fel vid borttagning från organisation: " + error.message);
-      }
-    },
-    async fetchMissingOrganizations(orgIds) {
-      if (!orgIds || orgIds.length === 0) return;
-      
-      try {
-        const wpData = window.wpScheduleData || {};
-        const promises = orgIds.map(orgId => 
-          fetch(`${wpData.rest_url}schedule/v1/organizations/${orgId}`, {
-            method: 'GET',
-            credentials: 'same-origin',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-WP-Nonce': wpData.nonce
-            }
-          })
-          .then(response => {
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-          })
-        );
-        
-        const organizations = await Promise.all(promises);
-        
-        // Uppdatera organizations store med de nya organisationerna
-        organizations.forEach(org => {
-          if (!this.organizationsStore.organizations.some(existingOrg => existingOrg.id === org.id)) {
-            this.organizationsStore.$patch((state) => {
-              state.organizations.push(org);
-            });
-          }
-        });
-      } catch (error) {
-        console.error('Error fetching missing organizations:', error);
-      }
-    },
-    hasVisibleOrganizations(user) {
-      return user.organizations && 
-             Array.isArray(user.organizations) && 
-             user.organizations.some(orgId => orgId !== this.selectedOrganization.id);
-    },
-    getRoleClass(role) {
-      switch (role) {
-        case 'admin':
-        case 'schemaanmain':
-          return 'role-admin';
-        case 'scheduler':
-        case 'schemalaggare':
-          return 'role-scheduler';
-        case 'base':
-          return 'role-base';
-        default:
-          return '';
-      }
-    },
-    editResource(resource) {
-      this.editingResource = resource;
-      this.resourceForm = {
-        name: resource.name,
-        description: resource.description || '',
-        is_24_7: resource.is_24_7,
-        start_time: resource.start_time || '',
-        end_time: resource.end_time || ''
+    
+    // Resource management
+    openResourceForm(isEditing) {
+      this.editingResource = null;
+      this.currentResource = {
+        name: '',
+        description: '',
+        type: 'room',
+        meta: {},
+        organization_id: this.selectedOrganization?.id
       };
       this.showResourceForm = true;
     },
+    
+    editResource(resource) {
+      this.editingResource = resource;
+      this.currentResource = { ...resource };
+      this.showResourceForm = true;
+    },
+    
     async saveResource() {
+      if (!this.selectedOrganization) return;
+      
       this.resourceLoading = true;
+      
       try {
         if (this.editingResource) {
-          await this.resourcesStore.updateResource(this.editingResource.id, this.resourceForm);
+          await this.resourcesStore.updateResource(this.currentResource);
         } else {
-          await this.resourcesStore.createResource(this.selectedOrganization.id, this.resourceForm);
+          await this.resourcesStore.createResource({
+            ...this.currentResource,
+            organization_id: this.selectedOrganization.id
+          });
         }
+        
         await this.loadOrganizationResources(this.selectedOrganization.id);
         this.showResourceForm = false;
         this.resetResourceForm();
-      } catch (error) {
-        alert(this.editingResource ? 
-          "Fel vid uppdatering av resurs: " + error.message :
-          "Fel vid skapande av resurs: " + error.message
-        );
+      } catch (err) {
+        this.error = 'Kunde inte spara resursen: ' + (err.message || 'Okänt fel');
       } finally {
         this.resourceLoading = false;
       }
     },
+    
     resetResourceForm() {
-      this.resourceForm = {
+      this.editingResource = null;
+      this.currentResource = {
         name: '',
         description: '',
-        is_24_7: true,
-        start_time: '',
-        end_time: ''
+        type: 'room',
+        meta: {}
       };
-      this.editingResource = null;
     },
-    async confirmDeleteResource(resource) {
-      if (confirm(`Är du säker på att du vill ta bort resursen "${resource.name}"?`)) {
-        await this.removeResource(resource);
+    
+    confirmDeleteResource(resource) {
+      if (confirm(`Är du säker på att du vill ta bort resursen ${resource.name}?`)) {
+        this.removeResource(resource);
       }
     },
+    
     async removeResource(resource) {
+      if (!this.selectedOrganization) return;
+      
       try {
         await this.resourcesStore.deleteResource(resource.id);
         await this.loadOrganizationResources(this.selectedOrganization.id);
-      } catch (error) {
-        alert("Fel vid borttagning av resurs: " + error.message);
+      } catch (err) {
+        this.error = 'Kunde inte ta bort resursen: ' + (err.message || 'Okänt fel');
       }
-    }
-  },
-  watch: {
-    activeTab(newTab) {
-      if (newTab === 'resources' && this.selectedOrganization) {
-        this.loadOrganizationResources(this.selectedOrganization.id);
+    },
+    
+    // Helper methods
+    async fetchMissingOrganizations(orgIds) {
+      if (!orgIds.length) return;
+      
+      // Filter out organizations we already have
+      const knownOrgIds = this.organizations.map(org => org.id);
+      const missingOrgIds = orgIds.filter(id => !knownOrgIds.includes(id));
+      
+      if (missingOrgIds.length === 0) return;
+      
+      try {
+        await this.organizationsStore.fetchOrganizationsByIds(missingOrgIds);
+      } catch (err) {
+        console.error('Error fetching missing organizations:', err);
       }
-    }
+    },
+    
+    getOrganizationName(orgId) {
+      const org = this.organizations.find(o => o.id === orgId);
+      return org ? org.name : 'Okänd organisation';
+    },
+    
+    formatDate,
+    translateRole,
+    getRoleClass
   }
-};
+});
 </script>
 
 <style scoped>
 .organizations {
-  padding: 20px 0;
+  padding: 20px;
 }
 
 .organizations-header {
@@ -994,25 +613,49 @@ export default {
   margin-bottom: 20px;
 }
 
+.organizations-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.loading-indicator, 
+.error-message {
+  padding: 20px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+/* Table styling */
 .organizations-table {
   width: 100%;
   border-collapse: collapse;
+  border: 1px solid #e0e0e0;
 }
 
 .organizations-table th,
 .organizations-table td {
-  padding: 10px;
+  padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .organizations-table th {
-  background-color: #f9f9f9;
-  font-weight: bold;
+  background-color: #f5f5f5;
+  font-weight: 600;
+}
+
+.organizations-table .actions {
+  display: flex;
+  gap: 8px;
 }
 
 .child-org {
-  background-color: #f9f9f9;
+  background-color: #fafafa;
 }
 
 .indent {
@@ -1020,295 +663,53 @@ export default {
 }
 
 .org-name {
-  font-weight: bold;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-start;
-  min-width: 200px;
-}
-
-.actions .btn {
-  white-space: nowrap;
-  min-width: fit-content;
-}
-
-.btn {
-  display: inline-block;
-  background-color: #0073aa;
-  color: #fff;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: none;
-  text-align: center;
-  transition: background-color 0.2s;
-}
-
-.btn:hover {
-  background-color: #005177;
-}
-
-.btn:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background-color: #0073aa;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-}
-
-.btn-danger {
-  background-color: #dc3545;
-}
-
-.btn-danger:hover {
-  background-color: #bd2130;
-}
-
-.btn-small {
-  padding: 4px 12px;
-  font-size: 0.9em;
-  min-width: 80px;
-  text-align: center;
-}
-
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  z-index: 1000;
-  padding: 2rem;
-  overflow-y: auto;
-}
-
-.modal-content {
-  background-color: white;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 1200px;
-  margin: 2rem auto;
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 4rem);
-}
-
-.modal-header {
-  position: sticky;
-  top: 0;
-  background: white;
-  z-index: 2;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e5e5;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-radius: 8px 8px 0 0;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: #333;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #666;
-  padding: 0.5rem;
-}
-
-.close-button:hover {
-  color: #333;
-}
-
-.modal-body {
-  padding: 1.5rem;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 200px;
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
 }
 
-.form-group input[type="text"],
-.form-group textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.form-group input[type="text"]:focus,
-.form-group textarea:focus {
-  border-color: #4a90e2;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
-}
-
-.availability-options {
-  display: flex;
-  gap: 1.5rem;
-  margin-top: 0.5rem;
-}
-
-.radio-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.time-inputs {
-  display: flex;
-  gap: 1rem;
-  margin-top: 0.5rem;
-}
-
-.time-input {
-  flex: 1;
-}
-
-.time-input input[type="time"] {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background-color: #4a90e2;
-  color: white;
-  border: none;
-}
-
-.btn-primary:hover {
-  background-color: #357abd;
-}
-
-.btn-primary:disabled {
-  background-color: #a0c3e8;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background-color: #f5f5f5;
-  color: #333;
-  border: 1px solid #ddd;
-}
-
-.btn-secondary:hover {
-  background-color: #e5e5e5;
-}
-
+/* Make sure background styles carry from the original */
 .organization-details {
-  margin-bottom: 30px;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  margin-bottom: 20px;
 }
 
 .organization-details p {
-  margin: 10px 0;
-}
-
-.tabs {
-  margin-top: 20px;
+  margin: 8px 0;
 }
 
 .tab-header {
   display: flex;
-  border-bottom: 2px solid #e5e5e5;
-  margin-bottom: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 16px;
 }
 
 .tab-button {
-  padding: 10px 20px;
+  padding: 8px 16px;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 16px;
-  color: #666;
-  position: relative;
+  font-size: 1rem;
+  opacity: 0.7;
 }
 
 .tab-button.active {
-  color: #0073aa;
-  font-weight: bold;
+  border-bottom: 2px solid #1976d2;
+  opacity: 1;
+  font-weight: 500;
 }
 
-.tab-button.active::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #0073aa;
-}
-
-.tab-content {
-  padding: 1rem 0;
-  overflow: visible;
-}
-
-.tab-pane {
-  overflow: visible;
-}
-
-.user-list, .resource-list {
-  overflow: visible;
-  margin: -1.5rem;
-  padding: 1.5rem;
+.tab-actions {
+  margin-bottom: 16px;
 }
 
 .data-table {
-  min-width: 800px;
   width: 100%;
-  margin-bottom: 2rem;
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .data-table th {
@@ -1318,272 +719,43 @@ export default {
   z-index: 1;
 }
 
-.data-table th,
-.data-table td {
-  padding: 12px;
-  text-align: left;
-  border-bottom: 1px solid #e5e5e5;
-  white-space: nowrap;
-}
-
-.data-table td:last-child {
-  padding-right: 24px;
-  min-width: 180px;
-}
-
-.other-orgs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.org-badge {
-  background: #e9ecef;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.9em;
-  color: #495057;
-}
-
-.loading {
-  text-align: center;
-  padding: 20px;
-  color: #666;
-}
-
-.current-org-controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.current-org-controls select {
-  flex: 1;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.organizations-list {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.organization-item {
-  padding: 12px;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.organization-item:last-child {
-  border-bottom: none;
-}
-
-.org-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.org-name {
-  font-weight: 500;
-  color: #333;
-}
-
-.org-role-badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  font-weight: 500;
-  background: #e9ecef;
-  color: #495057;
-}
-
-.org-role-badge.role-admin {
-  background: #dc3545;
-  color: white;
-}
-
-.org-role-badge.role-scheduler {
-  background: #0073aa;
-  color: white;
-}
-
-.org-role-badge.role-base {
-  background: #6c757d;
-  color: white;
-}
-
-.form-actions {
-  margin-top: 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.form-actions-right {
-  display: flex;
-  gap: 12px;
-}
-
 .org-chips-container {
-  min-width: 250px;
-  max-width: none;
-  width: 100%;
-}
-
-.no-orgs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #666;
-  font-style: italic;
-  padding: 4px 8px;
-  background: #f8f9fa;
-  border-radius: 4px;
-  font-size: 0.9em;
+  max-width: 300px;
 }
 
 .org-chips {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .org-chip {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 20px;
-  background: linear-gradient(to right, #f8f9fa, #e9ecef);
-  border: 1px solid #dee2e6;
-  font-size: 0.9em;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-
-.org-chip:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.org-chip.role-admin {
-  background: linear-gradient(to right, #fee2e2, #fecaca);
-  border-color: #fca5a5;
-}
-
-.org-chip.role-scheduler {
-  background: linear-gradient(to right, #dbeafe, #bfdbfe);
-  border-color: #93c5fd;
-}
-
-.org-chip.role-base {
-  background: linear-gradient(to right, #f3f4f6, #e5e7eb);
-  border-color: #d1d5db;
-}
-
-.org-chip-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: #4b5563;
-}
-
-.org-chip-name {
-  font-weight: 500;
-  color: #374151;
+  background-color: #f1f1f1;
+  border-radius: 16px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  max-width: 100%;
 }
 
 .org-chip-role {
-  font-size: 0.85em;
+  background-color: rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
   padding: 2px 6px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.5);
-  color: #4b5563;
+  margin-left: 4px;
+  font-size: 0.75rem;
 }
 
-.org-chip.role-admin .org-chip-role {
-  background: #dc3545;
-  color: white;
+.org-chip.role-admin {
+  background-color: #e3f2fd;
 }
 
-.org-chip.role-scheduler .org-chip-role {
-  background: #0073aa;
-  color: white;
+.org-chip.role-scheduler {
+  background-color: #e8f5e9;
 }
 
-.org-chip.role-base .org-chip-role {
-  background: #6c757d;
-  color: white;
-}
-
-/* Lägg till WordPress dashicons */
-@font-face {
-  font-family: "dashicons";
-  src: url("/wp-includes/fonts/dashicons.eot");
-  src: url("/wp-includes/fonts/dashicons.eot?#iefix") format("embedded-opentype"),
-       url("/wp-includes/fonts/dashicons.woff") format("woff"),
-       url("/wp-includes/fonts/dashicons.ttf") format("truetype"),
-       url("/wp-includes/fonts/dashicons.svg#dashicons") format("svg");
-  font-weight: normal;
-  font-style: normal;
-}
-
-.dashicons {
-  font-family: "dashicons";
-  font-size: 16px;
-  line-height: 1;
-  font-weight: 400;
-  font-style: normal;
-  text-decoration: inherit;
-  text-transform: none;
-  -webkit-font-smoothing: antialiased;
-}
-
-.dashicons-building:before {
-  content: "\f512";
-}
-
-.dashicons-businessman:before {
-  content: "\f338";
-}
-
-/* Förbättrat responsivitet för mindre skärmar */
-@media (max-width: 768px) {
-  .modal {
-    padding: 0;
-  }
-
-  .modal-content {
-    width: 100%;
-    max-width: 100%;
-    margin: 0;
-    border-radius: 0;
-    height: 100vh;
-  }
-
-  .modal-body {
-    padding: 1rem;
-  }
-
-  .user-list, .resource-list {
-    margin: -1rem;
-    padding: 1rem;
-  }
-
-  .data-table {
-    min-width: 650px;
-  }
-
-  .btn-small {
-    min-width: 70px;
-    padding: 4px 8px;
-  }
+.org-chip.role-employee {
+  background-color: #f1f8e9;
 }
 </style>

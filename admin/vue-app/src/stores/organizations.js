@@ -34,6 +34,14 @@ export const useOrganizationsStore = defineStore('organizations', {
     
     // Get organizations as flat list with indentation level
     getOrganizationFlatList: (state) => {
+      // First deduplicate organizations by ID to prevent duplicates
+      const uniqueOrgs = {};
+      state.organizations.forEach(org => {
+        uniqueOrgs[org.id] = org;
+      });
+      
+      const deduplicatedOrgs = Object.values(uniqueOrgs);
+      
       // Helper function to flatten tree with level
       const flattenWithLevel = (items, parentId = null, level = 0) => {
         let result = [];
@@ -54,7 +62,7 @@ export const useOrganizationsStore = defineStore('organizations', {
         return result;
       };
       
-      return flattenWithLevel([...state.organizations]);
+      return flattenWithLevel(deduplicatedOrgs);
     },
     
     // Check if organizations are loading
@@ -83,7 +91,14 @@ export const useOrganizationsStore = defineStore('organizations', {
         }
         
         const data = await response.json();
-        this.organizations = data;
+        
+        // Deduplicate organizations by ID
+        const uniqueOrgs = {};
+        data.forEach(org => {
+          uniqueOrgs[org.id] = org;
+        });
+        
+        this.organizations = Object.values(uniqueOrgs);
       } catch (error) {
         console.error('Error fetching organizations:', error);
         this.error = error.message;
@@ -119,7 +134,11 @@ export const useOrganizationsStore = defineStore('organizations', {
         if (index !== -1) {
           this.organizations[index] = data;
         } else {
-          this.organizations.push(data);
+          // Check if organization already exists before adding
+          const existingOrg = this.organizations.find(org => org.id === data.id);
+          if (!existingOrg) {
+            this.organizations.push(data);
+          }
         }
         
         this.currentOrganization = data;
@@ -155,7 +174,13 @@ export const useOrganizationsStore = defineStore('organizations', {
         }
         
         const data = await response.json();
-        this.organizations.push(data);
+        
+        // Check if organization already exists before adding
+        const existingOrg = this.organizations.find(org => org.id === data.id);
+        if (!existingOrg) {
+          this.organizations.push(data);
+        }
+        
         return data;
       } catch (error) {
         console.error('Error creating organization:', error);
@@ -254,6 +279,56 @@ export const useOrganizationsStore = defineStore('organizations', {
     // Clear current organization
     clearCurrentOrganization() {
       this.currentOrganization = null;
+    },
+    
+    // Fetch multiple organizations by IDs
+    async fetchOrganizationsByIds(ids) {
+      if (!ids || ids.length === 0) return [];
+      
+      this.loading = true;
+      this.error = null;
+      
+      try {
+        const wpData = window.wpScheduleData || {};
+        const organizations = [];
+        
+        // Process each ID in sequence to avoid race conditions
+        for (const id of ids) {
+          // Skip if we already have this organization
+          if (this.organizations.some(org => org.id === id)) continue;
+          
+          const response = await fetch(`${wpData.rest_url}schedule/v1/organizations/${id}`, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-WP-Nonce': wpData.nonce
+            }
+          });
+          
+          if (!response.ok) {
+            console.error(`HTTP error when fetching organization ${id}: ${response.status}`);
+            continue; // Skip this one but continue with others
+          }
+          
+          const data = await response.json();
+          
+          // Only add to our organizations store if not already there
+          const index = this.organizations.findIndex(org => org.id === id);
+          if (index === -1) {
+            this.organizations.push(data);
+            organizations.push(data);
+          }
+        }
+        
+        return organizations;
+      } catch (error) {
+        console.error(`Error fetching organizations:`, error);
+        this.error = error.message;
+        throw error;
+      } finally {
+        this.loading = false;
+      }
     }
   }
 });

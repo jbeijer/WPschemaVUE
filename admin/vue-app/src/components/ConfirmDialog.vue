@@ -12,20 +12,25 @@
         </div>
       </div>
       <div class="confirm-dialog-footer">
-        <button class="btn btn-secondary" @click="cancel">
+        <BaseButton variant="secondary" @click="cancel">
           {{ cancelText }}
-        </button>
-        <button class="btn" :class="confirmButtonClass" @click="confirm" :disabled="loading">
+        </BaseButton>
+        <BaseButton :variant="confirmButtonVariant" @click="confirm" :loading="loading">
           {{ loading ? loadingText : confirmText }}
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import BaseButton from '@/components/BaseButton.vue';
+
 export default {
   name: 'ConfirmDialog',
+  components: {
+    BaseButton
+  },
   props: {
     show: {
       type: Boolean,
@@ -70,6 +75,14 @@ export default {
     closeOnBackdropClick: {
       type: Boolean,
       default: true
+    }
+  },
+  computed: {
+    confirmButtonVariant() {
+      if (this.confirmButtonClass === 'btn-primary') return 'primary';
+      if (this.confirmButtonClass === 'btn-danger') return 'danger';
+      if (this.confirmButtonClass === 'btn-secondary') return 'secondary';
+      return '';
     }
   },
   methods: {
@@ -149,46 +162,14 @@ export default {
   gap: 10px;
 }
 
-.btn {
-  display: inline-block;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: none;
-  text-align: center;
-  transition: background-color 0.2s;
-}
-
-.btn-primary {
-  background-color: #0073aa;
-  color: #fff;
-}
-
-.btn-primary:hover {
-  background-color: #005177;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: #fff;
-}
-
-.btn-secondary:hover {
-  background-color: #5a6268;
-}
-
-.btn-danger {
-  background-color: #dc3545;
-  color: #fff;
-}
-
-.btn-danger:hover {
-  background-color: #bd2130;
-}
-
+.btn,
+.btn-primary,
+.btn-primary:hover,
+.btn-secondary,
+.btn-secondary:hover,
+.btn-danger,
+.btn-danger:hover,
 .btn:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+  display: none;
 }
 </style>
