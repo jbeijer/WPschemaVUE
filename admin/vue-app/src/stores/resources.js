@@ -146,8 +146,48 @@ export const useResourcesStore = defineStore('resources', {
         
         // Add time constraints if not 24/7
         if (!resourceData.is_24_7) {
-          formattedData.start_time = resourceData.start_time;
-          formattedData.end_time = resourceData.end_time;
+          // Ensure time values are in the correct format (HH:MM)
+          // The backend expects times in format HH:MM or HH:MM:SS
+          // Make sure we're sending exactly in that format
+          if (resourceData.start_time) {
+            // Extract just the HH:MM part to ensure proper format
+            let startTime = resourceData.start_time;
+            // If the time contains more than just HH:MM, trim it
+            if (startTime.length > 5) {
+              startTime = startTime.substring(0, 5);
+            }
+            
+            // Ensure hours and minutes are properly formatted
+            const startTimeParts = startTime.split(':');
+            if (startTimeParts.length >= 2) {
+              const hours = startTimeParts[0].padStart(2, '0');
+              const minutes = startTimeParts[1].padStart(2, '0');
+              formattedData.start_time = `${hours}:${minutes}`;
+              console.log('Formatted start_time:', formattedData.start_time);
+            } else {
+              console.error('Invalid start_time format:', startTime);
+            }
+          }
+          
+          if (resourceData.end_time) {
+            // Extract just the HH:MM part to ensure proper format
+            let endTime = resourceData.end_time;
+            // If the time contains more than just HH:MM, trim it
+            if (endTime.length > 5) {
+              endTime = endTime.substring(0, 5);
+            }
+            
+            // Ensure hours and minutes are properly formatted
+            const endTimeParts = endTime.split(':');
+            if (endTimeParts.length >= 2) {
+              const hours = endTimeParts[0].padStart(2, '0');
+              const minutes = endTimeParts[1].padStart(2, '0');
+              formattedData.end_time = `${hours}:${minutes}`;
+              console.log('Formatted end_time:', formattedData.end_time);
+            } else {
+              console.error('Invalid end_time format:', endTime);
+            }
+          }
         }
         
         console.log('Creating resource with data:', {
